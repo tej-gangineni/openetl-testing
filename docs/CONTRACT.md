@@ -76,3 +76,58 @@ Concurrency default 1 (`TEST_CONCURRENCY`). A scenario waits while any of its `r
 
 ## Store (`data/results.db`, node:sqlite)
 `runs(run_id PK, scenario_id, verdict, started_at, ended_at)`, `events(run_id, seq, ts, type, step_id, json)`. `data/` is gitignored.
+
+---
+
+# Contract v2 (adds what is really happening; everything above still holds)
+
+The v1 screen showed only step titles and pass/fail. v2 makes every step show its real input and output.
+
+## Scenario additions
+```json
+{
+  "summary": "Loads 8 Gutenberg books into Postgres and proves the table matches the source files.",
+  "flow": {
+    "source": { "kind": "files",    "label": "8 book .txt files", "detail": "${lab}/downloads/books" },
+    "engine": { "label": "openetl job run pg_books" },
+    "target": { "kind": "postgres", "label": "Postgres table books", "detail": "openetl-lab-postgres:5433/openetl" }
+  },
+  "steps": [ { "id": "run", "explain": "Runs the real pipeline. Everything below checks what it produced.", "always": false, "...": "as v1" } ]
+}
+```
+- `summary` (plain English, one or two sentences) and `flow` (three boxes: source, engine, target; `kind` is one of `files | http | postgres | mongodb | clickhouse | elasticsearch | qdrant | relata | docker`) are required for every scenario.
+- `explain` (one plain sentence: why this step exists) is required for every step.
+- `always: true` marks a cleanup step. It runs even after a step ended `blocked` (for example restart a container that a fault step stopped). Its `fail` or `blocked` still counts in the verdict.
+
+## Action result addition
+`{ ok?, value?, evidence?, io? }` where `io` is the real traffic of the step:
+```json
+{ "kind": "sql", "request": { "target": "openetl-lab-postgres", "text": "SELECT count(*) FROM books" },
+  "response": { "columns": ["count"], "rows": [[1997]], "rowCount": 1, "truncated": false } }
+```
+- `kind`: `command | sql | http | fs | docker | compare`.
+- `request`: `command` -> `{ text: "uv run ... openetl job run ...", cwd }`; `sql` -> `{ target, text }`; `http` -> `{ method, url, headers (secrets replaced by "***"), body }`; `fs` -> `{ path, glob }`; `docker` -> `{ container, op }`; `compare` -> `{ left, op, right }`.
+- `response`: tabular data as `{ columns, rows, rowCount, truncated }` (max 20 rows, each cell cut at 200 characters), or for `http` `{ status, body }` (body cut at 4 KB), or for `command` `{ exitCode, summary }` where `summary` is the parsed result object, or for `docker` `{ ok, state }`.
+- Whole `io` object under 8 KB.
+
+## Event additions
+- `step.start` now also carries `explain`.
+- New `step.io`: `{ type: "step.io", stepId, io }` emitted once per step, before its `step.end`, if the action returned `io`.
+- `step.log` gains `level`: `"info"` (default) or `"detail"`. OpenETL output lines that contain `[SUBSTEP]` are `detail`; the UI hides detail lines by default.
+- `run.start.scenario` now also carries `summary`, `flow`, and per-step `explain` and `always`.
+- `run.end` may carry `note` (string), e.g. "interrupted".
+
+## Before and after
+A scenario shows what changed in the database by running the same read action before and after the trigger step (for example a `pg.rows` step in `prepare` and another in `verify`), each with `io`. The UI pairs them by a shared `compareKey` field on the step (`"compareKey": "books-sample"`): steps with the same key and `phase` prepare vs verify are shown side by side as Before / After.
+
+## Interrupted-run sweep (fix)
+Add `runs.pid`. The startup sweep closes only runs whose `pid` is no longer alive. Never close a run owned by a live process.
+
+## The 5 scenarios (ids fixed)
+| id | tracker row | what it proves | target |
+|---|---|---|---|
+| S01-pg-books-ingest | r047 | baseline: books table matches source files | postgres |
+| S02-relata-typed-rows | r049 | 3 known fixture rows arrive in Relata as typed rows with the right fields | relata (http :9090) |
+| S03-clickhouse-diamonds | r044 | whether 54,000 diamonds CSV rows arrive as columns or as text blobs | clickhouse |
+| S04-es-wiki-parse | r140, r142 | Wikipedia HTML pages parse and chunk; Optical_fiber.html is the known failure | elasticsearch |
+| S05-pg-retry-on-outage | r096 | what happens when Postgres goes down mid-run: retry, final status, lost or doubled rows | postgres + docker |
