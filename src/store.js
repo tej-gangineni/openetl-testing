@@ -5,13 +5,18 @@ import { root } from './config.js';
 
 export const defaultDbPath = path.join(root, 'data', 'results.db');
 
+function pidAlive(pid) {
+  if (!Number.isInteger(pid) || pid <= 0) return false;
+  try { process.kill(pid, 0); return true; } catch (e) { return e.code === 'EPERM'; }
+}
+
 export function createStore(file = defaultDbPath) {
   if (file !== ':memory:') fs.mkdirSync(path.dirname(file), { recursive: true });
   const db = new DatabaseSync(file);
   db.exec(`
     CREATE TABLE IF NOT EXISTS runs (
       run_id TEXT PRIMARY KEY, scenario_id TEXT NOT NULL, verdict TEXT,
-      started_at TEXT NOT NULL, ended_at TEXT
+      started_at TEXT NOT NULL, ended_at TEXT, pid INTEGER
     );
     CREATE TABLE IF NOT EXISTS events (
       run_id TEXT NOT NULL, seq INTEGER NOT NULL, ts TEXT NOT NULL,
@@ -21,8 +26,13 @@ export function createStore(file = defaultDbPath) {
     CREATE INDEX IF NOT EXISTS runs_scenario ON runs (scenario_id, started_at);
   `);
 
+  // Databases made before v2 lack runs.pid: add it, touching no rows.
+  if (!db.prepare('PRAGMA table_info(runs)').all().some((c) => c.name === 'pid')) {
+    db.exec('ALTER TABLE runs ADD COLUMN pid INTEGER');
+  }
+
   const q = {
-    insRun: db.prepare('INSERT INTO runs (run_id, scenario_id, started_at) VALUES (?, ?, ?)'),
+    insRun: db.prepare('INSERT INTO runs (run_id, scenario_id, started_at, pid) VALUES (?, ?, ?, ?)'),
     insEvent: db.prepare('INSERT INTO events (run_id, seq, ts, type, step_id, json) VALUES (?, ?, ?, ?, ?, ?)'),
     endRun: db.prepare('UPDATE runs SET verdict = ?, ended_at = ? WHERE run_id = ?'),
     run: db.prepare('SELECT * FROM runs WHERE run_id = ?'),
@@ -39,8 +49,8 @@ export function createStore(file = defaultDbPath) {
   };
 
   return {
-    createRun(runId, scenarioId, startedAt = new Date().toISOString()) {
-      q.insRun.run(runId, scenarioId, startedAt);
+    createRun(runId, scenarioId, startedAt = new Date().toISOString(), pid = process.pid) {
+      q.insRun.run(runId, scenarioId, startedAt, pid);
     },
     addEvent(ev) {
       q.insEvent.run(ev.runId, ev.seq, ev.ts, ev.type, ev.stepId ?? null, JSON.stringify(ev));
@@ -56,9 +66,13 @@ export function createStore(file = defaultDbPath) {
       const r = q.last.get(scenarioId);
       return r ? { runId: r.run_id, verdict: r.verdict, ts: r.ended_at ?? r.started_at } : null;
     },
-    // Ends runs that were cut off (killed process) so they do not look like they are still running.
+    // Ends runs that were cut off so they do not look like they are still running.
+    // With a runId: that one run (the caller owns it). Without: the startup sweep, which only
+    // touches runs whose owning process is gone (a missing pid, from before v2, counts as gone).
     closeInterrupted(runId) {
-      const open = runId ? [q.run.get(runId)].filter((r) => r && r.verdict === null) : q.open.all();
+      const open = runId
+        ? [q.run.get(runId)].filter((r) => r && r.verdict === null)
+        : q.open.all().filter((r) => !pidAlive(r.pid));
       for (const r of open) {
         const events = q.events.all(r.run_id).map((e) => JSON.parse(e.json));
         const counts = { pass: 0, fail: 0, blocked: 0, skipped: 0 };

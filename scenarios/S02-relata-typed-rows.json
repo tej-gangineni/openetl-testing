@@ -1,0 +1,333 @@
+{
+  "id": "S02-relata-typed-rows",
+  "title": "Relata: fixture events arrive as typed rows",
+  "tracker_row": "r049",
+  "summary": "Creates 3 small known attack-event files, loads them into the local Relata with the real relata sink, then reads them back and checks the typed fields (event id, city, state, group, attack type). Only these 3 fixture rows are added to Relata.",
+  "flow": {
+    "source": {
+      "kind": "files",
+      "label": "3 fixture event .md files (marker S02-<run>)",
+      "detail": "scenarios/fixtures/s02, copied to a temp folder"
+    },
+    "engine": {
+      "label": "openetl job run s02 pipeline (attackdb_module)"
+    },
+    "target": {
+      "kind": "relata",
+      "label": "Relata type TerrorAttackEvent",
+      "detail": "http://localhost:9090"
+    }
+  },
+  "tags": [
+    "relata",
+    "typed-rows",
+    "http"
+  ],
+  "resources": [
+    "relata:dev"
+  ],
+  "steps": [
+    {
+      "id": "stage",
+      "phase": "prepare",
+      "title": "Write the 3 fixture files with a unique marker",
+      "explain": "Each run gets its own marker so its rows can be told apart from any other data.",
+      "action": "fixture.stage",
+      "args": {
+        "name": "s02"
+      },
+      "save": "stage"
+    },
+    {
+      "id": "before",
+      "phase": "prepare",
+      "title": "Look for the marker in Relata (Before)",
+      "explain": "Before the run Relata must hold no row with this marker.",
+      "action": "relata.query",
+      "args": {
+        "sql": "SELECT event_id, attack_date, city, state, group_name, attack_type, target_type, weapon_type, primary_source FROM TerrorAttackEvent WHERE summary_text LIKE '%${stage.marker}%' ORDER BY event_id"
+      },
+      "compareKey": "s02-rows"
+    },
+    {
+      "id": "run",
+      "phase": "trigger",
+      "title": "Run the pipeline into Relata",
+      "explain": "Runs the real pipeline with the relata sink against the local Relata.",
+      "action": "openetl.jobRun",
+      "args": {
+        "pipeline": "${stage.pipeline}",
+        "cwd": "${lab}",
+        "relata": true,
+        "env": {
+          "S02_DIR": "${stage.dir}"
+        }
+      },
+      "save": "run"
+    },
+    {
+      "id": "status",
+      "phase": "observe",
+      "title": "Job finished with status COMPLETED",
+      "explain": "A clean run is COMPLETED.",
+      "action": "check.compare",
+      "args": {
+        "left": "${run.status}",
+        "op": "eq",
+        "right": "COMPLETED"
+      }
+    },
+    {
+      "id": "warn",
+      "phase": "observe",
+      "title": "Job reported no warnings",
+      "explain": "Warnings would mean rows were skipped or quarantined.",
+      "action": "check.compare",
+      "args": {
+        "left": "${run.warnings}",
+        "op": "eq",
+        "right": 0
+      }
+    },
+    {
+      "id": "files",
+      "phase": "observe",
+      "title": "Job read all 3 fixture files",
+      "explain": "All three input files must be read.",
+      "action": "check.compare",
+      "args": {
+        "left": "${run.files}",
+        "op": "eq",
+        "right": 3
+      }
+    },
+    {
+      "id": "after",
+      "phase": "verify",
+      "title": "Read the rows back from Relata (After)",
+      "explain": "Reads what Relata actually stored for this marker.",
+      "action": "relata.query",
+      "args": {
+        "sql": "SELECT event_id, attack_date, city, state, group_name, attack_type, target_type, weapon_type, primary_source FROM TerrorAttackEvent WHERE summary_text LIKE '%${stage.marker}%' ORDER BY event_id"
+      },
+      "save": "got",
+      "compareKey": "s02-rows"
+    },
+    {
+      "id": "cnt",
+      "phase": "verify",
+      "title": "Count the stored rows",
+      "explain": "Exactly 3 typed rows must exist for this marker: no loss, no duplicates.",
+      "action": "check.compare",
+      "args": {
+        "left": "${got.length}",
+        "op": "eq",
+        "right": 3
+      }
+    },
+    {
+      "id": "id1",
+      "phase": "verify",
+      "title": "Row 1: event_id comes from the file name",
+      "explain": "The event id is taken from the 12 digit file name.",
+      "action": "check.compare",
+      "args": {
+        "left": "${got.0.event_id}",
+        "op": "eq",
+        "right": "${stage.eid1}"
+      }
+    },
+    {
+      "id": "city1",
+      "phase": "verify",
+      "title": "Row 1: city is Testville",
+      "explain": "Checks that the City line of the file became the city field.",
+      "action": "check.compare",
+      "args": {
+        "left": "${got.0.city}",
+        "op": "eq",
+        "right": "Testville"
+      }
+    },
+    {
+      "id": "state1",
+      "phase": "verify",
+      "title": "Row 1: state is Testland",
+      "explain": "Checks that the State line became the state field.",
+      "action": "check.compare",
+      "args": {
+        "left": "${got.0.state}",
+        "op": "eq",
+        "right": "Testland"
+      }
+    },
+    {
+      "id": "group1",
+      "phase": "verify",
+      "title": "Row 1: group_name is Lashkar-e-Taiba",
+      "explain": "Checks that a known group name is kept.",
+      "action": "check.compare",
+      "args": {
+        "left": "${got.0.group_name}",
+        "op": "eq",
+        "right": "Lashkar-e-Taiba"
+      }
+    },
+    {
+      "id": "type1",
+      "phase": "verify",
+      "title": "Row 1: attack_type is Bombing",
+      "explain": "Checks that the attack type was parsed into its own field.",
+      "action": "check.compare",
+      "args": {
+        "left": "${got.0.attack_type}",
+        "op": "eq",
+        "right": "Bombing"
+      }
+    },
+    {
+      "id": "id2",
+      "phase": "verify",
+      "title": "Row 2: event_id comes from the file name",
+      "explain": "The event id is taken from the 12 digit file name.",
+      "action": "check.compare",
+      "args": {
+        "left": "${got.1.event_id}",
+        "op": "eq",
+        "right": "${stage.eid2}"
+      }
+    },
+    {
+      "id": "city2",
+      "phase": "verify",
+      "title": "Row 2: city is Hillton",
+      "explain": "Checks that the City line of the file became the city field.",
+      "action": "check.compare",
+      "args": {
+        "left": "${got.1.city}",
+        "op": "eq",
+        "right": "Hillton"
+      }
+    },
+    {
+      "id": "state2",
+      "phase": "verify",
+      "title": "Row 2: state is Testland",
+      "explain": "Checks that the State line became the state field.",
+      "action": "check.compare",
+      "args": {
+        "left": "${got.1.state}",
+        "op": "eq",
+        "right": "Testland"
+      }
+    },
+    {
+      "id": "group2",
+      "phase": "verify",
+      "title": "Row 2: group_name is Maoists",
+      "explain": "Checks that a known group name is kept.",
+      "action": "check.compare",
+      "args": {
+        "left": "${got.1.group_name}",
+        "op": "eq",
+        "right": "Maoists"
+      }
+    },
+    {
+      "id": "type2",
+      "phase": "verify",
+      "title": "Row 2: attack_type is Armed Assault",
+      "explain": "Checks that the attack type was parsed into its own field.",
+      "action": "check.compare",
+      "args": {
+        "left": "${got.1.attack_type}",
+        "op": "eq",
+        "right": "Armed Assault"
+      }
+    },
+    {
+      "id": "id3",
+      "phase": "verify",
+      "title": "Row 3: event_id comes from the file name",
+      "explain": "The event id is taken from the 12 digit file name.",
+      "action": "check.compare",
+      "args": {
+        "left": "${got.2.event_id}",
+        "op": "eq",
+        "right": "${stage.eid3}"
+      }
+    },
+    {
+      "id": "city3",
+      "phase": "verify",
+      "title": "Row 3: city is Rivertown",
+      "explain": "Checks that the City line of the file became the city field.",
+      "action": "check.compare",
+      "args": {
+        "left": "${got.2.city}",
+        "op": "eq",
+        "right": "Rivertown"
+      }
+    },
+    {
+      "id": "state3",
+      "phase": "verify",
+      "title": "Row 3: state is Otherland",
+      "explain": "Checks that the State line became the state field.",
+      "action": "check.compare",
+      "args": {
+        "left": "${got.2.state}",
+        "op": "eq",
+        "right": "Otherland"
+      }
+    },
+    {
+      "id": "group3",
+      "phase": "verify",
+      "title": "Row 3: group_name is Hizbul Mujahideen",
+      "explain": "Checks that a known group name is kept.",
+      "action": "check.compare",
+      "args": {
+        "left": "${got.2.group_name}",
+        "op": "eq",
+        "right": "Hizbul Mujahideen"
+      }
+    },
+    {
+      "id": "type3",
+      "phase": "verify",
+      "title": "Row 3: attack_type is Arson",
+      "explain": "Checks that the attack type was parsed into its own field.",
+      "action": "check.compare",
+      "args": {
+        "left": "${got.2.attack_type}",
+        "op": "eq",
+        "right": "Arson"
+      }
+    },
+    {
+      "id": "date",
+      "phase": "verify",
+      "title": "Row 1: attack_date is 2099-12-31",
+      "explain": "The date is derived from the file name and stored as a date string.",
+      "action": "check.compare",
+      "args": {
+        "left": "${got.0.attack_date}",
+        "op": "eq",
+        "right": "2099-12-31"
+      }
+    },
+    {
+      "id": "src",
+      "phase": "verify",
+      "title": "Row 1: primary_source contains the marker",
+      "explain": "The Primary Source URL of the file must be stored.",
+      "action": "check.compare",
+      "args": {
+        "left": "${got.0.primary_source}",
+        "op": "contains",
+        "right": "${stage.marker}"
+      }
+    }
+  ]
+}

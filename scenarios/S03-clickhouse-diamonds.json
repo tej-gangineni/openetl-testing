@@ -1,0 +1,182 @@
+{
+  "id": "S03-clickhouse-diamonds",
+  "title": "ClickHouse: diamonds CSV arrives as columns, not text blobs",
+  "tracker_row": "r044",
+  "summary": "Loads the 53,940-row diamonds CSV into ClickHouse and checks whether each CSV row became a table row with its own columns (carat, price, ...). Known defect: today the file is stored as a few hundred text chunks, so this scenario is expected to fail.",
+  "flow": {
+    "source": {
+      "kind": "files",
+      "label": "diamonds.csv, 53,940 data rows",
+      "detail": "${lab}/downloads/csv/diamonds"
+    },
+    "engine": {
+      "label": "openetl job run ch_diamonds"
+    },
+    "target": {
+      "kind": "clickhouse",
+      "label": "ClickHouse table diamonds",
+      "detail": "openetl-lab-clickhouse:8123/openetl"
+    }
+  },
+  "tags": [
+    "lab",
+    "clickhouse",
+    "known-defect"
+  ],
+  "resources": [
+    "clickhouse:lab"
+  ],
+  "steps": [
+    {
+      "id": "empty",
+      "phase": "prepare",
+      "title": "Drop the ClickHouse table diamonds",
+      "explain": "Starts from a clean slate so everything found later was written by this run.",
+      "action": "ch.dropTable",
+      "args": {
+        "table": "diamonds"
+      }
+    },
+    {
+      "id": "srcRows",
+      "phase": "prepare",
+      "title": "Count the data rows in the source CSV",
+      "explain": "The number of rows a correct load must produce.",
+      "action": "fs.countCsvRows",
+      "args": {
+        "file": "${lab}/downloads/csv/diamonds/diamonds.csv"
+      },
+      "save": "srcRows"
+    },
+    {
+      "id": "before",
+      "phase": "prepare",
+      "title": "List the table columns (Before)",
+      "explain": "Before the run the table does not exist, so it has no columns.",
+      "action": "ch.rows",
+      "args": {
+        "sql": "SELECT name, type FROM system.columns WHERE database = 'openetl' AND table = 'diamonds' ORDER BY position"
+      },
+      "compareKey": "diamonds-columns"
+    },
+    {
+      "id": "run",
+      "phase": "trigger",
+      "title": "Run the ch_diamonds pipeline",
+      "explain": "Runs the real pipeline. Everything below checks what it produced.",
+      "action": "openetl.jobRun",
+      "args": {
+        "pipeline": "${lab}/pipelines/ch_diamonds.toml",
+        "cwd": "${lab}",
+        "extras": [
+          "clickhouse"
+        ]
+      },
+      "save": "run"
+    },
+    {
+      "id": "status",
+      "phase": "observe",
+      "title": "Job finished with status COMPLETED",
+      "explain": "The job itself reports success; the checks below test whether that is true.",
+      "action": "check.compare",
+      "args": {
+        "left": "${run.status}",
+        "op": "eq",
+        "right": "COMPLETED"
+      }
+    },
+    {
+      "id": "warn",
+      "phase": "observe",
+      "title": "Job reported no warnings",
+      "explain": "Any warning would hint at skipped data.",
+      "action": "check.compare",
+      "args": {
+        "left": "${run.warnings}",
+        "op": "eq",
+        "right": 0
+      }
+    },
+    {
+      "id": "after",
+      "phase": "verify",
+      "title": "List the table columns (After)",
+      "explain": "Shows what the table looks like after the run.",
+      "action": "ch.rows",
+      "args": {
+        "sql": "SELECT name, type FROM system.columns WHERE database = 'openetl' AND table = 'diamonds' ORDER BY position"
+      },
+      "compareKey": "diamonds-columns"
+    },
+    {
+      "id": "rows",
+      "phase": "verify",
+      "title": "Count rows in the diamonds table",
+      "explain": "The real number of rows ClickHouse holds.",
+      "action": "ch.scalar",
+      "args": {
+        "sql": "SELECT count() FROM diamonds"
+      },
+      "save": "rowCount"
+    },
+    {
+      "id": "rowsEq",
+      "phase": "verify",
+      "title": "Row count equals the source CSV rows",
+      "explain": "A correct load stores one row per CSV row.",
+      "action": "check.compare",
+      "args": {
+        "left": "${rowCount}",
+        "op": "eq",
+        "right": "${srcRows}"
+      }
+    },
+    {
+      "id": "carat",
+      "phase": "verify",
+      "title": "Count columns named carat",
+      "explain": "A correct load has a column for each CSV header.",
+      "action": "ch.scalar",
+      "args": {
+        "sql": "SELECT count() FROM system.columns WHERE database = 'openetl' AND table = 'diamonds' AND name = 'carat'"
+      },
+      "save": "caratCols"
+    },
+    {
+      "id": "caratEq",
+      "phase": "verify",
+      "title": "The table has a carat column",
+      "explain": "Without it the diamond data cannot be queried by carat or price.",
+      "action": "check.compare",
+      "args": {
+        "left": "${caratCols}",
+        "op": "eq",
+        "right": 1
+      }
+    },
+    {
+      "id": "price",
+      "phase": "verify",
+      "title": "Count columns named price",
+      "explain": "The price column is the second check that the CSV was split into fields.",
+      "action": "ch.scalar",
+      "args": {
+        "sql": "SELECT count() FROM system.columns WHERE database = 'openetl' AND table = 'diamonds' AND name = 'price'"
+      },
+      "save": "priceCols"
+    },
+    {
+      "id": "priceEq",
+      "phase": "verify",
+      "title": "The table has a price column",
+      "explain": "Same check for price.",
+      "action": "check.compare",
+      "args": {
+        "left": "${priceCols}",
+        "op": "eq",
+        "right": 1
+      }
+    }
+  ]
+}

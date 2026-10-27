@@ -1,0 +1,37 @@
+name        = "s02-relata-fixtures"
+description = "Three synthetic attackdb-format markdown files -> Relata (openetl-testing scenario S02)"
+
+[[sources]]
+type      = "local"
+path      = "${S02_DIR}"
+filter    = "*.md"
+recursive = true
+
+[[transforms]]
+type      = "extract"
+strategy  = "fast"
+entities  = false
+relation_types = []
+
+[[transforms]]
+type = "enrich"
+[transforms.fields]
+lea_module = "attackdb"
+dataset    = "openetl-testing-s02"
+source_org = "openetl-testing"
+
+[[transforms]]
+type           = "attackdb_module"
+min_confidence = 0.4
+
+[[sinks]]
+type       = "relata"
+server_url = "${RELATA_URL:-http://localhost:9090}"
+token      = "${RELATA_TOKEN:-}"
+tenant     = "${RELATA_TENANT:-}"
+purpose    = "intelligence"
+timeout    = 60.0
+
+[concurrency]
+workers    = 1
+sink_batch = 10

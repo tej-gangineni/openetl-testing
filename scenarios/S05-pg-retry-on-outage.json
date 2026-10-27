@@ -1,0 +1,261 @@
+{
+  "id": "S05-pg-retry-on-outage",
+  "title": "Postgres goes down in the middle of a load",
+  "tracker_row": "r096",
+  "summary": "Starts the pg_books load, stops the Postgres container for about 5 seconds while it runs, then starts it again and reports the final job status, whether the table has exactly the expected rows (none lost, none doubled) and the warnings. It may legitimately fail: the point is to show what really happens.",
+  "flow": {
+    "source": {
+      "kind": "files",
+      "label": "8 Gutenberg book .txt files",
+      "detail": "${lab}/downloads/books"
+    },
+    "engine": {
+      "label": "openetl job run pg_books (Postgres stopped mid-run)"
+    },
+    "target": {
+      "kind": "postgres",
+      "label": "Postgres table books",
+      "detail": "openetl-lab-postgres:5433/openetl"
+    }
+  },
+  "tags": [
+    "lab",
+    "postgres",
+    "docker",
+    "fault-injection"
+  ],
+  "resources": [
+    "postgres:lab",
+    "docker:openetl-lab-postgres"
+  ],
+  "steps": [
+    {
+      "id": "empty0",
+      "phase": "prepare",
+      "title": "Empty the books table",
+      "explain": "Starts clean before the reference run.",
+      "action": "pg.dropTable",
+      "args": {
+        "table": "books"
+      }
+    },
+    {
+      "id": "base",
+      "phase": "prepare",
+      "title": "Reference run without any fault",
+      "explain": "Establishes how many rows a healthy run writes, so the faulty run has a real number to meet.",
+      "action": "openetl.jobRun",
+      "args": {
+        "pipeline": "${lab}/pipelines/pg_books.toml",
+        "cwd": "${lab}",
+        "extras": [
+          "postgres"
+        ]
+      },
+      "save": "baseRun"
+    },
+    {
+      "id": "baseCount",
+      "phase": "prepare",
+      "title": "Count rows after the reference run",
+      "explain": "This is the expected row count.",
+      "action": "pg.scalar",
+      "args": {
+        "sql": "SELECT count(*) FROM books"
+      },
+      "save": "expectedRows"
+    },
+    {
+      "id": "empty",
+      "phase": "prepare",
+      "title": "Empty the books table again",
+      "explain": "Clears the reference rows so the faulty run starts from nothing.",
+      "action": "pg.dropTable",
+      "args": {
+        "table": "books"
+      }
+    },
+    {
+      "id": "before",
+      "phase": "prepare",
+      "title": "Read sample rows of books (Before)",
+      "explain": "Shows the table before the faulty run: it was just dropped.",
+      "action": "pg.rows",
+      "args": {
+        "sql": "SELECT source_filename, sequence_index, left(text, 50) AS text_start FROM books ORDER BY source_filename, sequence_index LIMIT 5",
+        "tolerateMissing": true
+      },
+      "compareKey": "books-sample"
+    },
+    {
+      "id": "start",
+      "phase": "trigger",
+      "title": "Start the pipeline in the background",
+      "explain": "The job must be running while the database is taken away.",
+      "action": "openetl.jobStart",
+      "args": {
+        "pipeline": "${lab}/pipelines/pg_books.toml",
+        "cwd": "${lab}",
+        "extras": [
+          "postgres"
+        ]
+      },
+      "save": "handle"
+    },
+    {
+      "id": "wait1",
+      "phase": "trigger",
+      "title": "Let the job run for 4 seconds",
+      "explain": "Gives the job time to get into its work before the fault.",
+      "action": "wait.sleep",
+      "args": {
+        "seconds": 4
+      }
+    },
+    {
+      "id": "stop",
+      "phase": "trigger",
+      "title": "Stop the Postgres container",
+      "explain": "The fault: the database disappears in the middle of the run.",
+      "action": "docker.stop",
+      "args": {
+        "container": "openetl-lab-postgres"
+      }
+    },
+    {
+      "id": "wait2",
+      "phase": "trigger",
+      "title": "Keep Postgres down for 5 seconds",
+      "explain": "Long enough for the job to hit connection errors.",
+      "action": "wait.sleep",
+      "args": {
+        "seconds": 5
+      }
+    },
+    {
+      "id": "start2",
+      "phase": "trigger",
+      "title": "Start Postgres again and wait until healthy",
+      "explain": "The database comes back. The job may or may not recover.",
+      "action": "docker.start",
+      "args": {
+        "container": "openetl-lab-postgres"
+      }
+    },
+    {
+      "id": "wait",
+      "phase": "trigger",
+      "title": "Wait for the job to finish",
+      "explain": "Collects the final status and warnings of the interrupted job.",
+      "action": "openetl.jobWait",
+      "args": {
+        "handle": "${handle}"
+      },
+      "save": "run"
+    },
+    {
+      "id": "cleanup",
+      "phase": "verify",
+      "title": "Make sure Postgres is running",
+      "explain": "Safety net: leaves the lab database running whatever happened above.",
+      "action": "docker.start",
+      "args": {
+        "container": "openetl-lab-postgres"
+      },
+      "always": true
+    },
+    {
+      "id": "status",
+      "phase": "observe",
+      "title": "Job finished with status COMPLETED",
+      "explain": "What the job says happened after the outage.",
+      "action": "check.compare",
+      "args": {
+        "left": "${run.status}",
+        "op": "eq",
+        "right": "COMPLETED"
+      }
+    },
+    {
+      "id": "warn",
+      "phase": "observe",
+      "title": "Job reported 0 warnings",
+      "explain": "Warnings show what the job noticed about the outage.",
+      "action": "check.compare",
+      "args": {
+        "left": "${run.warnings}",
+        "op": "eq",
+        "right": 0
+      }
+    },
+    {
+      "id": "warnText",
+      "phase": "observe",
+      "title": "No warning or error lines in the output",
+      "explain": "The actual warning and error text, if any.",
+      "action": "check.compare",
+      "args": {
+        "left": "${run.warningLines}",
+        "op": "eq",
+        "right": []
+      }
+    },
+    {
+      "id": "count",
+      "phase": "verify",
+      "title": "Count rows in books",
+      "explain": "The real number of rows in the table.",
+      "action": "pg.scalar",
+      "args": {
+        "sql": "SELECT count(*) FROM books"
+      },
+      "save": "rowCount"
+    },
+    {
+      "id": "countEq",
+      "phase": "verify",
+      "title": "Row count equals the reference run",
+      "explain": "Fewer rows means data was lost.",
+      "action": "check.compare",
+      "args": {
+        "left": "${rowCount}",
+        "op": "eq",
+        "right": "${expectedRows}"
+      }
+    },
+    {
+      "id": "dupes",
+      "phase": "verify",
+      "title": "Count duplicated chunks",
+      "explain": "Rows that repeat the same chunk would mean data was doubled.",
+      "action": "pg.scalar",
+      "args": {
+        "sql": "SELECT count(*) - count(DISTINCT (source_filename, sequence_index)) FROM books"
+      },
+      "save": "dupes"
+    },
+    {
+      "id": "dupesEq",
+      "phase": "verify",
+      "title": "No chunk is stored twice",
+      "explain": "Retrying a write must not double rows.",
+      "action": "check.compare",
+      "args": {
+        "left": "${dupes}",
+        "op": "eq",
+        "right": 0
+      }
+    },
+    {
+      "id": "after",
+      "phase": "verify",
+      "title": "Read sample rows of books (After)",
+      "explain": "Shows the table after the outage and the retry.",
+      "action": "pg.rows",
+      "args": {
+        "sql": "SELECT source_filename, sequence_index, left(text, 50) AS text_start FROM books ORDER BY source_filename, sequence_index LIMIT 5"
+      },
+      "compareKey": "books-sample"
+    }
+  ]
+}

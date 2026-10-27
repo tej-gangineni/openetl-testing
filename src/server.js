@@ -4,6 +4,7 @@ import config from './config.js';
 import actions from './actions/index.js';
 import { loadScenarios, filterScenarios } from './scenarios.js';
 import { createStore } from './store.js';
+import { resolveLenient } from './template.js';
 import { createScheduler } from './scheduler.js';
 
 const ORIGINS = new Set(['http://127.0.0.1:5173', 'http://localhost:5173']);
@@ -39,7 +40,7 @@ export function createApp({ store, scheduler, getScenarios }) {
         });
         return json(200, {
           scenarios: list.map((s) => ({
-            id: s.id, title: s.title, tracker_row: s.tracker_row ?? null, tags: s.tags,
+            id: s.id, title: s.title, summary: s.summary, flow: resolveLenient(s.flow, { lab: config.lab, repo: config.repo }), tracker_row: s.tracker_row ?? null, tags: s.tags,
             resources: s.resources, stepCount: s.steps.length, lastRun: store.lastRun(s.id),
           })),
         });

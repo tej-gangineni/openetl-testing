@@ -18,7 +18,7 @@ const realApi = {
   async startRun(scenarioId) {
     return (await j('/runs', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ scenarioId }) })).runId;
   },
-  async listRuns(scenarioId) { return (await j(`/runs?scenarioId=${encodeURIComponent(scenarioId)}&limit=50`)).runs; },
+  async listRuns(scenarioId) { return (await j(`/runs?scenarioId=${encodeURIComponent(scenarioId || '')}&limit=50`)).runs; },
   async getRun(runId) { return j(`/runs/${encodeURIComponent(runId)}`); },
   // SSE: stored events replay first, then live ones; the server closes after run.end.
   subscribe(runId, onEvent, onDone, onError) {

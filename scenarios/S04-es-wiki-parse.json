@@ -1,0 +1,163 @@
+{
+  "id": "S04-es-wiki-parse",
+  "title": "Elasticsearch: every Wikipedia page is parsed and indexed",
+  "tracker_row": "r140, r142",
+  "summary": "Parses the Wikipedia HTML pages, chunks them and loads them into the Elasticsearch index wiki_pages, then checks the job was clean and every page is present. Known defect: Optical_fiber.html fails to parse, so this scenario is expected to fail and show which page is missing.",
+  "flow": {
+    "source": {
+      "kind": "files",
+      "label": "25 Wikipedia .html pages",
+      "detail": "${lab}/downloads/web"
+    },
+    "engine": {
+      "label": "openetl job run es_wiki_pages"
+    },
+    "target": {
+      "kind": "elasticsearch",
+      "label": "Elasticsearch index wiki_pages",
+      "detail": "127.0.0.1:9200"
+    }
+  },
+  "tags": [
+    "lab",
+    "elasticsearch",
+    "known-defect"
+  ],
+  "resources": [
+    "elasticsearch:lab"
+  ],
+  "steps": [
+    {
+      "id": "empty",
+      "phase": "prepare",
+      "title": "Delete the wiki_pages index",
+      "explain": "Starts from a clean slate so every document found later was written by this run.",
+      "action": "es.dropIndex",
+      "args": {
+        "index": "wiki_pages"
+      }
+    },
+    {
+      "id": "src",
+      "phase": "prepare",
+      "title": "List the source HTML pages",
+      "explain": "The pages a correct run must index.",
+      "action": "fs.list",
+      "args": {
+        "dir": "${lab}/downloads/web",
+        "glob": "*.html"
+      },
+      "save": "srcPages"
+    },
+    {
+      "id": "before",
+      "phase": "prepare",
+      "title": "Count documents in the index (Before)",
+      "explain": "Before the run the index does not exist, so it holds nothing.",
+      "action": "es.count",
+      "args": {
+        "index": "wiki_pages"
+      },
+      "save": "docsBefore",
+      "compareKey": "wiki-count"
+    },
+    {
+      "id": "run",
+      "phase": "trigger",
+      "title": "Run the es_wiki_pages pipeline",
+      "explain": "Runs the real pipeline. Everything below checks what it produced.",
+      "action": "openetl.jobRun",
+      "args": {
+        "pipeline": "${lab}/pipelines/es_wiki_pages.toml",
+        "cwd": "${lab}",
+        "extras": [
+          "elasticsearch"
+        ]
+      },
+      "save": "run"
+    },
+    {
+      "id": "status",
+      "phase": "observe",
+      "title": "Job finished with status COMPLETED",
+      "explain": "PARTIAL means some part of the work failed.",
+      "action": "check.compare",
+      "args": {
+        "left": "${run.status}",
+        "op": "eq",
+        "right": "COMPLETED"
+      }
+    },
+    {
+      "id": "warn",
+      "phase": "observe",
+      "title": "Job reported 0 warnings",
+      "explain": "Each warning is a page or step that went wrong.",
+      "action": "check.compare",
+      "args": {
+        "left": "${run.warnings}",
+        "op": "eq",
+        "right": 0
+      }
+    },
+    {
+      "id": "warnText",
+      "phase": "observe",
+      "title": "No warning or error lines in the output",
+      "explain": "Shows the actual warning text the job printed, if any.",
+      "action": "check.compare",
+      "args": {
+        "left": "${run.warningLines}",
+        "op": "eq",
+        "right": []
+      }
+    },
+    {
+      "id": "after",
+      "phase": "verify",
+      "title": "Count documents in the index (After)",
+      "explain": "The real number of chunks Elasticsearch holds.",
+      "action": "es.count",
+      "args": {
+        "index": "wiki_pages"
+      },
+      "save": "docsAfter",
+      "compareKey": "wiki-count"
+    },
+    {
+      "id": "docs",
+      "phase": "verify",
+      "title": "The index holds documents",
+      "explain": "An empty index would mean nothing was loaded.",
+      "action": "check.compare",
+      "args": {
+        "left": "${docsAfter}",
+        "op": "gt",
+        "right": 0
+      }
+    },
+    {
+      "id": "indexed",
+      "phase": "verify",
+      "title": "List the distinct pages in the index",
+      "explain": "Which source pages made it into the index.",
+      "action": "es.distinct",
+      "args": {
+        "index": "wiki_pages",
+        "field": "source_filename"
+      },
+      "save": "indexedPages"
+    },
+    {
+      "id": "missing",
+      "phase": "verify",
+      "title": "Every source page is in the index",
+      "explain": "Names any page that was read but did not arrive.",
+      "action": "check.missing",
+      "args": {
+        "expected": "${srcPages}",
+        "actual": "${indexedPages}"
+      }
+    }
+  ]
+}

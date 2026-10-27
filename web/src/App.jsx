@@ -40,13 +40,14 @@ export default function App() {
       <header className="top">
         <a className="brand" href="#/"><span className="mark" aria-hidden="true" />OpenETL <b>Test Runner</b></a>
         {isMock && <span className="chip mockchip" title="Replaying a recorded sample, no backend needed">Mock mode</span>}
+        <nav className="topnav"><a href="#/">Scenarios</a><a href="#/history">History</a></nav>
         <span className="grow" />
         <button className="ghost" onClick={cycle} aria-label={`Theme: ${theme}. Click to change.`}>Theme: {theme}</button>
       </header>
       <main>
         {route.kind === 'run' && <RunView key={route.id} runId={route.id} mode="live" />}
         {route.kind === 'replay' && <RunView key={route.id} runId={route.id} mode="replay" />}
-        {route.kind === 'history' && <History scenarioId={route.id} />}
+        {route.kind === 'history' && <History key={route.id || 'all'} scenarioId={route.id} />}
         {!['run', 'replay', 'history'].includes(route.kind) && <ScenarioList />}
       </main>
     </div>

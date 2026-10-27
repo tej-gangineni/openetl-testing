@@ -28,3 +28,20 @@ export function resolve(value, vars) {
   }
   return value;
 }
+
+// Like resolve, but a variable that cannot be resolved stays as written (for display only).
+export function resolveLenient(value, vars) {
+  if (typeof value === 'string') {
+    return value.replace(EMBEDDED, (m, name) => {
+      try {
+        const v = lookup(vars, name);
+        return typeof v === 'object' && v !== null ? JSON.stringify(v) : String(v);
+      } catch { return m; }
+    });
+  }
+  if (Array.isArray(value)) return value.map((v) => resolveLenient(v, vars));
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, resolveLenient(v, vars)]));
+  }
+  return value;
+}

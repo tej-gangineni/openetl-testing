@@ -1,471 +1,1864 @@
 {
-  "run": {
-    "runId": "r_20261027_ab12",
-    "scenarioId": "S01-pg-books-ingest",
-    "verdict": "Fail",
-    "startedAt": "2026-10-27T12:00:00.000Z",
-    "endedAt": "2026-10-27T12:00:08.011Z"
+ "run": {
+  "runId": "r_20261027_ab12",
+  "scenarioId": "S01-pg-books-ingest",
+  "verdict": "Fail",
+  "startedAt": "2026-10-27T12:00:00.000Z",
+  "endedAt": "2026-10-27T12:00:08.638Z"
+ },
+ "events": [
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 0,
+   "ts": "2026-10-27T12:00:00.000Z",
+   "type": "run.start",
+   "scenario": {
+    "id": "S01-pg-books-ingest",
+    "title": "Postgres: books load matches the source",
+    "tracker_row": "r047",
+    "tags": [
+     "lab",
+     "postgres",
+     "baseline"
+    ],
+    "summary": "Splits 8 Gutenberg books into 1,997 chunks, loads them into Postgres and proves the table matches.",
+    "flow": {
+     "source": {
+      "kind": "files",
+      "label": "8 Gutenberg book .txt files",
+      "detail": "${lab}/downloads/books"
+     },
+     "engine": {
+      "label": "openetl job run pg_books"
+     },
+     "target": {
+      "kind": "postgres",
+      "label": "Postgres table books",
+      "detail": "openetl-lab-postgres:5433/openetl"
+     }
+    },
+    "steps": [
+     {
+      "id": "before",
+      "phase": "prepare",
+      "title": "Look at the books table before the run",
+      "explain": "Records what is in the table now, so we can see exactly what the run changed.",
+      "always": false,
+      "compareKey": "books-summary"
+     },
+     {
+      "id": "empty",
+      "phase": "prepare",
+      "title": "Empty the books table",
+      "explain": "Drops the table so every row we find afterwards was written by this run.",
+      "always": false
+     },
+     {
+      "id": "src",
+      "phase": "prepare",
+      "title": "Count the source files",
+      "explain": "Counts the .txt files OpenETL is given. Eight files are split into chunks, so rows will not equal files.",
+      "always": false
+     },
+     {
+      "id": "run",
+      "phase": "trigger",
+      "title": "Run the pipeline",
+      "explain": "Runs the real pipeline. Everything below checks what it produced.",
+      "always": false
+     },
+     {
+      "id": "status",
+      "phase": "observe",
+      "title": "The run finished clean",
+      "explain": "OpenETL should end with status COMPLETED, not FAILED or PARTIAL.",
+      "always": false
+     },
+     {
+      "id": "rows",
+      "phase": "observe",
+      "title": "Count the rows OpenETL loaded",
+      "explain": "Asks Postgres directly how many rows are in the table now.",
+      "always": false
+     },
+     {
+      "id": "count",
+      "phase": "verify",
+      "title": "Row count equals the known chunk count",
+      "explain": "The 8 books are known to split into 1,997 chunks, and each chunk should become exactly one row.",
+      "always": false
+     },
+     {
+      "id": "dupes",
+      "phase": "verify",
+      "title": "No chunk was loaded twice",
+      "explain": "A retry or restart can write the same chunk twice; this counts repeated ids.",
+      "always": false
+     },
+     {
+      "id": "sample",
+      "phase": "verify",
+      "title": "A sample row has text and a source file",
+      "explain": "Reads three random rows to prove the columns hold real text and a file name, not blanks.",
+      "always": false
+     },
+     {
+      "id": "after",
+      "phase": "verify",
+      "title": "Look at the books table after the run",
+      "explain": "Same query as the first step, so the change is visible side by side.",
+      "always": false,
+      "compareKey": "books-summary"
+     }
+    ]
+   }
   },
-  "events": [
-    {
-      "runId": "r_20261027_ab12",
-      "seq": 0,
-      "ts": "2026-10-27T12:00:00.000Z",
-      "type": "run.start",
-      "scenario": {
-        "id": "S01-pg-books-ingest",
-        "title": "Postgres: books load matches the source",
-        "tracker_row": "r047",
-        "tags": [
-          "lab",
-          "postgres",
-          "baseline"
-        ],
-        "steps": [
-          {
-            "id": "empty",
-            "phase": "prepare",
-            "title": "Empty the books table"
-          },
-          {
-            "id": "src",
-            "phase": "prepare",
-            "title": "Count source files"
-          },
-          {
-            "id": "run",
-            "phase": "trigger",
-            "title": "Run the pipeline"
-          },
-          {
-            "id": "status",
-            "phase": "observe",
-            "title": "Run finished clean"
-          },
-          {
-            "id": "rows",
-            "phase": "observe",
-            "title": "Count rows loaded"
-          },
-          {
-            "id": "count",
-            "phase": "verify",
-            "title": "Row count equals source file count"
-          },
-          {
-            "id": "dupes",
-            "phase": "verify",
-            "title": "No duplicate book ids"
-          },
-          {
-            "id": "sample",
-            "phase": "verify",
-            "title": "Sample row has title and author"
-          }
-        ]
-      }
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 1,
+   "ts": "2026-10-27T12:00:00.040Z",
+   "type": "step.start",
+   "stepId": "before",
+   "phase": "prepare",
+   "title": "Look at the books table before the run",
+   "explain": "Records what is in the table now, so we can see exactly what the run changed."
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 2,
+   "ts": "2026-10-27T12:00:00.085Z",
+   "type": "step.log",
+   "stepId": "before",
+   "line": "connected to openetl-lab-postgres",
+   "level": "info"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 3,
+   "ts": "2026-10-27T12:00:00.130Z",
+   "type": "step.io",
+   "stepId": "before",
+   "io": {
+    "kind": "sql",
+    "request": {
+     "target": "openetl-lab-postgres",
+     "text": "SELECT count(*) AS chunks, count(DISTINCT source_filename) AS files, max(id) AS newest_id FROM books"
     },
-    {
-      "runId": "r_20261027_ab12",
-      "seq": 1,
-      "ts": "2026-10-27T12:00:00.040Z",
-      "type": "step.start",
-      "stepId": "empty",
-      "phase": "prepare",
-      "title": "Empty the books table"
-    },
-    {
-      "runId": "r_20261027_ab12",
-      "seq": 2,
-      "ts": "2026-10-27T12:00:00.143Z",
-      "type": "step.log",
-      "stepId": "empty",
-      "line": "DROP TABLE IF EXISTS books"
-    },
-    {
-      "runId": "r_20261027_ab12",
-      "seq": 3,
-      "ts": "2026-10-27T12:00:00.246Z",
-      "type": "step.log",
-      "stepId": "empty",
-      "line": "table books dropped"
-    },
-    {
-      "runId": "r_20261027_ab12",
-      "seq": 4,
-      "ts": "2026-10-27T12:00:00.349Z",
-      "type": "step.end",
-      "stepId": "empty",
-      "phase": "prepare",
-      "state": "pass",
-      "evidence": {
-        "table": "books",
-        "dropped": true
-      },
-      "ms": 310
-    },
-    {
-      "runId": "r_20261027_ab12",
-      "seq": 5,
-      "ts": "2026-10-27T12:00:00.389Z",
-      "type": "step.start",
-      "stepId": "src",
-      "phase": "prepare",
-      "title": "Count source files"
-    },
-    {
-      "runId": "r_20261027_ab12",
-      "seq": 6,
-      "ts": "2026-10-27T12:00:00.449Z",
-      "type": "step.log",
-      "stepId": "src",
-      "line": "scanning lab/downloads/books/*.txt"
-    },
-    {
-      "runId": "r_20261027_ab12",
-      "seq": 7,
-      "ts": "2026-10-27T12:00:00.509Z",
-      "type": "step.log",
-      "stepId": "src",
-      "line": "1997 files matched"
-    },
-    {
-      "runId": "r_20261027_ab12",
-      "seq": 8,
-      "ts": "2026-10-27T12:00:00.569Z",
-      "type": "step.end",
-      "stepId": "src",
-      "phase": "prepare",
-      "state": "pass",
-      "evidence": {
-        "dir": "lab/downloads/books",
-        "glob": "*.txt",
-        "count": 1997
-      },
-      "ms": 48
-    },
-    {
-      "runId": "r_20261027_ab12",
-      "seq": 9,
-      "ts": "2026-10-27T12:00:00.609Z",
-      "type": "step.start",
-      "stepId": "run",
-      "phase": "trigger",
-      "title": "Run the pipeline"
-    },
-    {
-      "runId": "r_20261027_ab12",
-      "seq": 10,
-      "ts": "2026-10-27T12:00:01.191Z",
-      "type": "step.log",
-      "stepId": "run",
-      "line": "openetl job run pg_books.toml"
-    },
-    {
-      "runId": "r_20261027_ab12",
-      "seq": 11,
-      "ts": "2026-10-27T12:00:01.773Z",
-      "type": "step.log",
-      "stepId": "run",
-      "line": "load plugin: postgres"
-    },
-    {
-      "runId": "r_20261027_ab12",
-      "seq": 12,
-      "ts": "2026-10-27T12:00:02.355Z",
-      "type": "step.log",
-      "stepId": "run",
-      "line": "source: file glob, 1997 inputs"
-    },
-    {
-      "runId": "r_20261027_ab12",
-      "seq": 13,
-      "ts": "2026-10-27T12:00:02.937Z",
-      "type": "step.log",
-      "stepId": "run",
-      "line": "batch 1/4 ... 500 rows"
-    },
-    {
-      "runId": "r_20261027_ab12",
-      "seq": 14,
-      "ts": "2026-10-27T12:00:03.519Z",
-      "type": "step.log",
-      "stepId": "run",
-      "line": "batch 2/4 ... 500 rows"
-    },
-    {
-      "runId": "r_20261027_ab12",
-      "seq": 15,
-      "ts": "2026-10-27T12:00:04.101Z",
-      "type": "step.log",
-      "stepId": "run",
-      "line": "batch 3/4 ... 500 rows"
-    },
-    {
-      "runId": "r_20261027_ab12",
-      "seq": 16,
-      "ts": "2026-10-27T12:00:04.683Z",
-      "type": "step.log",
-      "stepId": "run",
-      "line": "batch 4/4 ... 494 rows"
-    },
-    {
-      "runId": "r_20261027_ab12",
-      "seq": 17,
-      "ts": "2026-10-27T12:00:05.265Z",
-      "type": "step.log",
-      "stepId": "run",
-      "line": "sink flushed, 1994 rows written"
-    },
-    {
-      "runId": "r_20261027_ab12",
-      "seq": 18,
-      "ts": "2026-10-27T12:00:05.847Z",
-      "type": "step.log",
-      "stepId": "run",
-      "line": "3 inputs rejected: empty body"
-    },
-    {
-      "runId": "r_20261027_ab12",
-      "seq": 19,
-      "ts": "2026-10-27T12:00:06.429Z",
-      "type": "step.log",
-      "stepId": "run",
-      "line": "status COMPLETED"
-    },
-    {
-      "runId": "r_20261027_ab12",
-      "seq": 20,
-      "ts": "2026-10-27T12:00:07.011Z",
-      "type": "step.end",
-      "stepId": "run",
-      "phase": "trigger",
-      "state": "pass",
-      "evidence": {
-        "status": "COMPLETED",
-        "rows_written": 1994,
-        "rejected": 3
-      },
-      "ms": 6400
-    },
-    {
-      "runId": "r_20261027_ab12",
-      "seq": 21,
-      "ts": "2026-10-27T12:00:07.051Z",
-      "type": "step.start",
-      "stepId": "status",
-      "phase": "observe",
-      "title": "Run finished clean"
-    },
-    {
-      "runId": "r_20261027_ab12",
-      "seq": 22,
-      "ts": "2026-10-27T12:00:07.111Z",
-      "type": "step.log",
-      "stepId": "status",
-      "line": "compare COMPLETED eq COMPLETED"
-    },
-    {
-      "runId": "r_20261027_ab12",
-      "seq": 23,
-      "ts": "2026-10-27T12:00:07.171Z",
-      "type": "step.end",
-      "stepId": "status",
-      "phase": "observe",
-      "state": "pass",
-      "evidence": {
-        "left": "COMPLETED",
-        "op": "eq",
-        "right": "COMPLETED"
-      },
-      "ms": 4
-    },
-    {
-      "runId": "r_20261027_ab12",
-      "seq": 24,
-      "ts": "2026-10-27T12:00:07.211Z",
-      "type": "step.start",
-      "stepId": "rows",
-      "phase": "observe",
-      "title": "Count rows loaded"
-    },
-    {
-      "runId": "r_20261027_ab12",
-      "seq": 25,
-      "ts": "2026-10-27T12:00:07.271Z",
-      "type": "step.log",
-      "stepId": "rows",
-      "line": "sql: SELECT count(*) FROM books"
-    },
-    {
-      "runId": "r_20261027_ab12",
-      "seq": 26,
-      "ts": "2026-10-27T12:00:07.331Z",
-      "type": "step.log",
-      "stepId": "rows",
-      "line": "scalar: 1994"
-    },
-    {
-      "runId": "r_20261027_ab12",
-      "seq": 27,
-      "ts": "2026-10-27T12:00:07.391Z",
-      "type": "step.end",
-      "stepId": "rows",
-      "phase": "observe",
-      "state": "pass",
-      "evidence": {
-        "sql": "SELECT count(*) FROM books",
-        "rows": [
-          [
-            1994
-          ]
-        ]
-      },
-      "ms": 120
-    },
-    {
-      "runId": "r_20261027_ab12",
-      "seq": 28,
-      "ts": "2026-10-27T12:00:07.431Z",
-      "type": "step.start",
-      "stepId": "count",
-      "phase": "verify",
-      "title": "Row count equals source file count"
-    },
-    {
-      "runId": "r_20261027_ab12",
-      "seq": 29,
-      "ts": "2026-10-27T12:00:07.491Z",
-      "type": "step.log",
-      "stepId": "count",
-      "line": "compare 1994 eq 1997"
-    },
-    {
-      "runId": "r_20261027_ab12",
-      "seq": 30,
-      "ts": "2026-10-27T12:00:07.551Z",
-      "type": "step.end",
-      "stepId": "count",
-      "phase": "verify",
-      "state": "fail",
-      "evidence": {
-        "left": 1994,
-        "op": "eq",
-        "right": 1997
-      },
-      "ms": 3
-    },
-    {
-      "runId": "r_20261027_ab12",
-      "seq": 31,
-      "ts": "2026-10-27T12:00:07.591Z",
-      "type": "step.start",
-      "stepId": "dupes",
-      "phase": "verify",
-      "title": "No duplicate book ids"
-    },
-    {
-      "runId": "r_20261027_ab12",
-      "seq": 32,
-      "ts": "2026-10-27T12:00:07.651Z",
-      "type": "step.log",
-      "stepId": "dupes",
-      "line": "sql: SELECT count(*) - count(DISTINCT book_id) FROM books"
-    },
-    {
-      "runId": "r_20261027_ab12",
-      "seq": 33,
-      "ts": "2026-10-27T12:00:07.711Z",
-      "type": "step.log",
-      "stepId": "dupes",
-      "line": "scalar: 0"
-    },
-    {
-      "runId": "r_20261027_ab12",
-      "seq": 34,
-      "ts": "2026-10-27T12:00:07.771Z",
-      "type": "step.end",
-      "stepId": "dupes",
-      "phase": "verify",
-      "state": "pass",
-      "evidence": {
-        "sql": "SELECT count(*) - count(DISTINCT book_id) FROM books",
-        "rows": [
-          [
-            0
-          ]
-        ]
-      },
-      "ms": 95
-    },
-    {
-      "runId": "r_20261027_ab12",
-      "seq": 35,
-      "ts": "2026-10-27T12:00:07.811Z",
-      "type": "step.start",
-      "stepId": "sample",
-      "phase": "verify",
-      "title": "Sample row has title and author"
-    },
-    {
-      "runId": "r_20261027_ab12",
-      "seq": 36,
-      "ts": "2026-10-27T12:00:07.871Z",
-      "type": "step.log",
-      "stepId": "sample",
-      "line": "sql: SELECT book_id, title, author FROM books ORDER BY random() LIMIT 3"
-    },
-    {
-      "runId": "r_20261027_ab12",
-      "seq": 37,
-      "ts": "2026-10-27T12:00:07.931Z",
-      "type": "step.log",
-      "stepId": "sample",
-      "line": "3 rows"
-    },
-    {
-      "runId": "r_20261027_ab12",
-      "seq": 38,
-      "ts": "2026-10-27T12:00:07.991Z",
-      "type": "step.end",
-      "stepId": "sample",
-      "phase": "verify",
-      "state": "pass",
-      "evidence": {
-        "sql": "SELECT book_id, title, author FROM books ORDER BY random() LIMIT 3",
-        "rows": [
-          {
-            "book_id": 1342,
-            "title": "Pride and Prejudice",
-            "author": "Austen, Jane"
-          },
-          {
-            "book_id": 84,
-            "title": "Frankenstein",
-            "author": "Shelley, Mary Wollstonecraft"
-          },
-          {
-            "book_id": 2701,
-            "title": "Moby Dick",
-            "author": "Melville, Herman"
-          }
-        ]
-      },
-      "ms": 88
-    },
-    {
-      "runId": "r_20261027_ab12",
-      "seq": 39,
-      "ts": "2026-10-27T12:00:08.011Z",
-      "type": "run.end",
-      "verdict": "Fail",
-      "counts": {
-        "pass": 7,
-        "fail": 1,
-        "blocked": 0,
-        "skipped": 0
-      },
-      "ms": 7991
+    "response": {
+     "columns": [
+      "chunks",
+      "files",
+      "newest_id"
+     ],
+     "rows": [
+      [
+       212,
+       2,
+       2412
+      ]
+     ],
+     "rowCount": 1,
+     "truncated": false
     }
-  ]
+   }
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 4,
+   "ts": "2026-10-27T12:00:00.160Z",
+   "type": "step.end",
+   "stepId": "before",
+   "phase": "prepare",
+   "state": "pass",
+   "ms": 90
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 5,
+   "ts": "2026-10-27T12:00:00.200Z",
+   "type": "step.start",
+   "stepId": "empty",
+   "phase": "prepare",
+   "title": "Empty the books table",
+   "explain": "Drops the table so every row we find afterwards was written by this run."
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 6,
+   "ts": "2026-10-27T12:00:00.303Z",
+   "type": "step.log",
+   "stepId": "empty",
+   "line": "DROP TABLE IF EXISTS books",
+   "level": "info"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 7,
+   "ts": "2026-10-27T12:00:00.406Z",
+   "type": "step.log",
+   "stepId": "empty",
+   "line": "table books dropped",
+   "level": "info"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 8,
+   "ts": "2026-10-27T12:00:00.509Z",
+   "type": "step.io",
+   "stepId": "empty",
+   "io": {
+    "kind": "sql",
+    "request": {
+     "target": "openetl-lab-postgres",
+     "text": "DROP TABLE IF EXISTS books"
+    },
+    "response": {
+     "columns": [
+      "result"
+     ],
+     "rows": [
+      [
+       "DROP TABLE"
+      ]
+     ],
+     "rowCount": 1,
+     "truncated": false
+    }
+   }
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 9,
+   "ts": "2026-10-27T12:00:00.539Z",
+   "type": "step.end",
+   "stepId": "empty",
+   "phase": "prepare",
+   "state": "pass",
+   "ms": 310
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 10,
+   "ts": "2026-10-27T12:00:00.579Z",
+   "type": "step.start",
+   "stepId": "src",
+   "phase": "prepare",
+   "title": "Count the source files",
+   "explain": "Counts the .txt files OpenETL is given. Eight files are split into chunks, so rows will not equal files."
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 11,
+   "ts": "2026-10-27T12:00:00.619Z",
+   "type": "step.log",
+   "stepId": "src",
+   "line": "scanning downloads/books/*.txt",
+   "level": "info"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 12,
+   "ts": "2026-10-27T12:00:00.659Z",
+   "type": "step.log",
+   "stepId": "src",
+   "line": "8 files matched",
+   "level": "info"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 13,
+   "ts": "2026-10-27T12:00:00.699Z",
+   "type": "step.io",
+   "stepId": "src",
+   "io": {
+    "kind": "fs",
+    "request": {
+     "path": "openetl-data-lab/downloads/books",
+     "glob": "*.txt"
+    },
+    "response": {
+     "count": 8,
+     "columns": [
+      "file",
+      "bytes"
+     ],
+     "rows": [
+      [
+       "pg1342.txt",
+       735000
+      ],
+      [
+       "pg84.txt",
+       448000
+      ],
+      [
+       "pg2701.txt",
+       1240000
+      ],
+      [
+       "pg11.txt",
+       174000
+      ],
+      [
+       "pg1661.txt",
+       593000
+      ],
+      [
+       "pg98.txt",
+       777000
+      ],
+      [
+       "pg1952.txt",
+       52000
+      ],
+      [
+       "pg174.txt",
+       441000
+      ]
+     ],
+     "rowCount": 8,
+     "truncated": false
+    }
+   }
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 14,
+   "ts": "2026-10-27T12:00:00.729Z",
+   "type": "step.end",
+   "stepId": "src",
+   "phase": "prepare",
+   "state": "pass",
+   "ms": 48
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 15,
+   "ts": "2026-10-27T12:00:00.769Z",
+   "type": "step.start",
+   "stepId": "run",
+   "phase": "trigger",
+   "title": "Run the pipeline",
+   "explain": "Runs the real pipeline. Everything below checks what it produced."
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 16,
+   "ts": "2026-10-27T12:00:01.196Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "openetl 0.9.4  job pg_books",
+   "level": "info"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 17,
+   "ts": "2026-10-27T12:00:01.623Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "source: file glob, 8 inputs",
+   "level": "info"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 18,
+   "ts": "2026-10-27T12:00:02.050Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "chunked 8 files into 1997 records",
+   "level": "info"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 19,
+   "ts": "2026-10-27T12:00:02.065Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 16 of pg84.txt  937 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 20,
+   "ts": "2026-10-27T12:00:02.080Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 32 of pg2701.txt  974 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 21,
+   "ts": "2026-10-27T12:00:02.095Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 48 of pg11.txt  1011 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 22,
+   "ts": "2026-10-27T12:00:02.110Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 64 of pg1661.txt  1048 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 23,
+   "ts": "2026-10-27T12:00:02.125Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 80 of pg98.txt  1085 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 24,
+   "ts": "2026-10-27T12:00:02.140Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 96 of pg1952.txt  1122 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 25,
+   "ts": "2026-10-27T12:00:02.155Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 112 of pg174.txt  1159 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 26,
+   "ts": "2026-10-27T12:00:02.170Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 128 of pg1342.txt  1196 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 27,
+   "ts": "2026-10-27T12:00:02.185Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 144 of pg84.txt  1233 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 28,
+   "ts": "2026-10-27T12:00:02.200Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 160 of pg2701.txt  1270 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 29,
+   "ts": "2026-10-27T12:00:02.215Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 176 of pg11.txt  1307 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 30,
+   "ts": "2026-10-27T12:00:02.230Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 192 of pg1661.txt  1344 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 31,
+   "ts": "2026-10-27T12:00:02.245Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 208 of pg98.txt  1381 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 32,
+   "ts": "2026-10-27T12:00:02.260Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 224 of pg1952.txt  1418 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 33,
+   "ts": "2026-10-27T12:00:02.275Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 240 of pg174.txt  1455 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 34,
+   "ts": "2026-10-27T12:00:02.290Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 256 of pg1342.txt  1492 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 35,
+   "ts": "2026-10-27T12:00:02.305Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 272 of pg84.txt  1529 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 36,
+   "ts": "2026-10-27T12:00:02.320Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 288 of pg2701.txt  1566 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 37,
+   "ts": "2026-10-27T12:00:02.335Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 304 of pg11.txt  903 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 38,
+   "ts": "2026-10-27T12:00:02.350Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 320 of pg1661.txt  940 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 39,
+   "ts": "2026-10-27T12:00:02.365Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 336 of pg98.txt  977 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 40,
+   "ts": "2026-10-27T12:00:02.380Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 352 of pg1952.txt  1014 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 41,
+   "ts": "2026-10-27T12:00:02.395Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 368 of pg174.txt  1051 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 42,
+   "ts": "2026-10-27T12:00:02.410Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 384 of pg1342.txt  1088 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 43,
+   "ts": "2026-10-27T12:00:02.425Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 400 of pg84.txt  1125 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 44,
+   "ts": "2026-10-27T12:00:02.440Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 416 of pg2701.txt  1162 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 45,
+   "ts": "2026-10-27T12:00:02.455Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 432 of pg11.txt  1199 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 46,
+   "ts": "2026-10-27T12:00:02.470Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 448 of pg1661.txt  1236 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 47,
+   "ts": "2026-10-27T12:00:02.485Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 464 of pg98.txt  1273 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 48,
+   "ts": "2026-10-27T12:00:02.500Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 480 of pg1952.txt  1310 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 49,
+   "ts": "2026-10-27T12:00:02.927Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "batch 1/4 ... 500 rows",
+   "level": "info"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 50,
+   "ts": "2026-10-27T12:00:02.942Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 496 of pg174.txt  1347 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 51,
+   "ts": "2026-10-27T12:00:02.957Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 512 of pg1342.txt  1384 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 52,
+   "ts": "2026-10-27T12:00:02.972Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 528 of pg84.txt  1421 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 53,
+   "ts": "2026-10-27T12:00:02.987Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 544 of pg2701.txt  1458 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 54,
+   "ts": "2026-10-27T12:00:03.002Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 560 of pg11.txt  1495 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 55,
+   "ts": "2026-10-27T12:00:03.017Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 576 of pg1661.txt  1532 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 56,
+   "ts": "2026-10-27T12:00:03.032Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 592 of pg98.txt  1569 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 57,
+   "ts": "2026-10-27T12:00:03.047Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 608 of pg1952.txt  906 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 58,
+   "ts": "2026-10-27T12:00:03.062Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 624 of pg174.txt  943 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 59,
+   "ts": "2026-10-27T12:00:03.077Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 640 of pg1342.txt  980 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 60,
+   "ts": "2026-10-27T12:00:03.092Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 656 of pg84.txt  1017 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 61,
+   "ts": "2026-10-27T12:00:03.107Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 672 of pg2701.txt  1054 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 62,
+   "ts": "2026-10-27T12:00:03.122Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 688 of pg11.txt  1091 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 63,
+   "ts": "2026-10-27T12:00:03.137Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 704 of pg1661.txt  1128 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 64,
+   "ts": "2026-10-27T12:00:03.152Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 720 of pg98.txt  1165 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 65,
+   "ts": "2026-10-27T12:00:03.167Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 736 of pg1952.txt  1202 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 66,
+   "ts": "2026-10-27T12:00:03.182Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 752 of pg174.txt  1239 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 67,
+   "ts": "2026-10-27T12:00:03.197Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 768 of pg1342.txt  1276 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 68,
+   "ts": "2026-10-27T12:00:03.212Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 784 of pg84.txt  1313 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 69,
+   "ts": "2026-10-27T12:00:03.227Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 800 of pg2701.txt  1350 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 70,
+   "ts": "2026-10-27T12:00:03.242Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 816 of pg11.txt  1387 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 71,
+   "ts": "2026-10-27T12:00:03.257Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 832 of pg1661.txt  1424 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 72,
+   "ts": "2026-10-27T12:00:03.272Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 848 of pg98.txt  1461 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 73,
+   "ts": "2026-10-27T12:00:03.287Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 864 of pg1952.txt  1498 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 74,
+   "ts": "2026-10-27T12:00:03.302Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 880 of pg174.txt  1535 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 75,
+   "ts": "2026-10-27T12:00:03.317Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 896 of pg1342.txt  1572 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 76,
+   "ts": "2026-10-27T12:00:03.332Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 912 of pg84.txt  909 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 77,
+   "ts": "2026-10-27T12:00:03.347Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 928 of pg2701.txt  946 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 78,
+   "ts": "2026-10-27T12:00:03.362Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 944 of pg11.txt  983 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 79,
+   "ts": "2026-10-27T12:00:03.377Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 960 of pg1661.txt  1020 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 80,
+   "ts": "2026-10-27T12:00:03.804Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "batch 2/4 ... 500 rows",
+   "level": "info"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 81,
+   "ts": "2026-10-27T12:00:03.819Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 976 of pg98.txt  1057 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 82,
+   "ts": "2026-10-27T12:00:03.834Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 992 of pg1952.txt  1094 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 83,
+   "ts": "2026-10-27T12:00:03.849Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 1008 of pg174.txt  1131 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 84,
+   "ts": "2026-10-27T12:00:03.864Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 1024 of pg1342.txt  1168 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 85,
+   "ts": "2026-10-27T12:00:03.879Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 1040 of pg84.txt  1205 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 86,
+   "ts": "2026-10-27T12:00:03.894Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 1056 of pg2701.txt  1242 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 87,
+   "ts": "2026-10-27T12:00:03.909Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 1072 of pg11.txt  1279 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 88,
+   "ts": "2026-10-27T12:00:03.924Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 1088 of pg1661.txt  1316 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 89,
+   "ts": "2026-10-27T12:00:03.939Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 1104 of pg98.txt  1353 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 90,
+   "ts": "2026-10-27T12:00:03.954Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 1120 of pg1952.txt  1390 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 91,
+   "ts": "2026-10-27T12:00:03.969Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 1136 of pg174.txt  1427 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 92,
+   "ts": "2026-10-27T12:00:03.984Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 1152 of pg1342.txt  1464 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 93,
+   "ts": "2026-10-27T12:00:03.999Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 1168 of pg84.txt  1501 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 94,
+   "ts": "2026-10-27T12:00:04.014Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 1184 of pg2701.txt  1538 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 95,
+   "ts": "2026-10-27T12:00:04.029Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 1200 of pg11.txt  1575 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 96,
+   "ts": "2026-10-27T12:00:04.044Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 1216 of pg1661.txt  912 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 97,
+   "ts": "2026-10-27T12:00:04.059Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 1232 of pg98.txt  949 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 98,
+   "ts": "2026-10-27T12:00:04.074Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 1248 of pg1952.txt  986 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 99,
+   "ts": "2026-10-27T12:00:04.089Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 1264 of pg174.txt  1023 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 100,
+   "ts": "2026-10-27T12:00:04.104Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 1280 of pg1342.txt  1060 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 101,
+   "ts": "2026-10-27T12:00:04.119Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 1296 of pg84.txt  1097 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 102,
+   "ts": "2026-10-27T12:00:04.134Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 1312 of pg2701.txt  1134 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 103,
+   "ts": "2026-10-27T12:00:04.149Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 1328 of pg11.txt  1171 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 104,
+   "ts": "2026-10-27T12:00:04.164Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 1344 of pg1661.txt  1208 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 105,
+   "ts": "2026-10-27T12:00:04.179Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 1360 of pg98.txt  1245 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 106,
+   "ts": "2026-10-27T12:00:04.194Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 1376 of pg1952.txt  1282 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 107,
+   "ts": "2026-10-27T12:00:04.209Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 1392 of pg174.txt  1319 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 108,
+   "ts": "2026-10-27T12:00:04.224Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 1408 of pg1342.txt  1356 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 109,
+   "ts": "2026-10-27T12:00:04.239Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 1424 of pg84.txt  1393 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 110,
+   "ts": "2026-10-27T12:00:04.254Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 1440 of pg2701.txt  1430 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 111,
+   "ts": "2026-10-27T12:00:04.681Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "batch 3/4 ... 500 rows",
+   "level": "info"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 112,
+   "ts": "2026-10-27T12:00:04.696Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 1456 of pg11.txt  1467 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 113,
+   "ts": "2026-10-27T12:00:04.711Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 1472 of pg1661.txt  1504 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 114,
+   "ts": "2026-10-27T12:00:04.726Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 1488 of pg98.txt  1541 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 115,
+   "ts": "2026-10-27T12:00:04.741Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 1504 of pg1952.txt  1578 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 116,
+   "ts": "2026-10-27T12:00:04.756Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 1520 of pg174.txt  915 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 117,
+   "ts": "2026-10-27T12:00:04.771Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 1536 of pg1342.txt  952 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 118,
+   "ts": "2026-10-27T12:00:04.786Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 1552 of pg84.txt  989 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 119,
+   "ts": "2026-10-27T12:00:04.801Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 1568 of pg2701.txt  1026 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 120,
+   "ts": "2026-10-27T12:00:04.816Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 1584 of pg11.txt  1063 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 121,
+   "ts": "2026-10-27T12:00:04.831Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 1600 of pg1661.txt  1100 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 122,
+   "ts": "2026-10-27T12:00:04.846Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 1616 of pg98.txt  1137 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 123,
+   "ts": "2026-10-27T12:00:04.861Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 1632 of pg1952.txt  1174 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 124,
+   "ts": "2026-10-27T12:00:04.876Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 1648 of pg174.txt  1211 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 125,
+   "ts": "2026-10-27T12:00:04.891Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 1664 of pg1342.txt  1248 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 126,
+   "ts": "2026-10-27T12:00:04.906Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 1680 of pg84.txt  1285 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 127,
+   "ts": "2026-10-27T12:00:04.921Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 1696 of pg2701.txt  1322 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 128,
+   "ts": "2026-10-27T12:00:04.936Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 1712 of pg11.txt  1359 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 129,
+   "ts": "2026-10-27T12:00:04.951Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 1728 of pg1661.txt  1396 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 130,
+   "ts": "2026-10-27T12:00:04.966Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 1744 of pg98.txt  1433 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 131,
+   "ts": "2026-10-27T12:00:04.981Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 1760 of pg1952.txt  1470 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 132,
+   "ts": "2026-10-27T12:00:04.996Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 1776 of pg174.txt  1507 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 133,
+   "ts": "2026-10-27T12:00:05.011Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 1792 of pg1342.txt  1544 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 134,
+   "ts": "2026-10-27T12:00:05.026Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 1808 of pg84.txt  1581 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 135,
+   "ts": "2026-10-27T12:00:05.041Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 1824 of pg2701.txt  918 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 136,
+   "ts": "2026-10-27T12:00:05.056Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 1840 of pg11.txt  955 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 137,
+   "ts": "2026-10-27T12:00:05.071Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 1856 of pg1661.txt  992 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 138,
+   "ts": "2026-10-27T12:00:05.086Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 1872 of pg98.txt  1029 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 139,
+   "ts": "2026-10-27T12:00:05.101Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 1888 of pg1952.txt  1066 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 140,
+   "ts": "2026-10-27T12:00:05.116Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 1904 of pg174.txt  1103 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 141,
+   "ts": "2026-10-27T12:00:05.131Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "[SUBSTEP] embed chunk 1920 of pg1342.txt  1140 chars",
+   "level": "detail"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 142,
+   "ts": "2026-10-27T12:00:05.558Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "batch 4/4 ... 494 rows",
+   "level": "info"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 143,
+   "ts": "2026-10-27T12:00:05.985Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "sink: postgres table books",
+   "level": "info"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 144,
+   "ts": "2026-10-27T12:00:06.412Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "sink flushed, 1994 rows written",
+   "level": "info"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 145,
+   "ts": "2026-10-27T12:00:06.839Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "3 chunks rejected: empty text",
+   "level": "info"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 146,
+   "ts": "2026-10-27T12:00:07.266Z",
+   "type": "step.log",
+   "stepId": "run",
+   "line": "status COMPLETED",
+   "level": "info"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 147,
+   "ts": "2026-10-27T12:00:07.693Z",
+   "type": "step.io",
+   "stepId": "run",
+   "io": {
+    "kind": "command",
+    "request": {
+     "text": "uv run openetl job run pipelines/pg_books.toml",
+     "cwd": "openetl-data-lab"
+    },
+    "response": {
+     "exitCode": 0,
+     "summary": {
+      "status": "COMPLETED",
+      "files_found": 8,
+      "records_read": 1997,
+      "records_written": 1994,
+      "rejected": 3,
+      "duration_s": 6.4
+     }
+    }
+   }
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 148,
+   "ts": "2026-10-27T12:00:07.723Z",
+   "type": "step.end",
+   "stepId": "run",
+   "phase": "trigger",
+   "state": "pass",
+   "ms": 6400
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 149,
+   "ts": "2026-10-27T12:00:07.763Z",
+   "type": "step.start",
+   "stepId": "status",
+   "phase": "observe",
+   "title": "The run finished clean",
+   "explain": "OpenETL should end with status COMPLETED, not FAILED or PARTIAL."
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 150,
+   "ts": "2026-10-27T12:00:07.803Z",
+   "type": "step.io",
+   "stepId": "status",
+   "io": {
+    "kind": "compare",
+    "request": {
+     "left": "COMPLETED",
+     "op": "eq",
+     "right": "COMPLETED"
+    }
+   }
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 151,
+   "ts": "2026-10-27T12:00:07.833Z",
+   "type": "step.end",
+   "stepId": "status",
+   "phase": "observe",
+   "state": "pass",
+   "ms": 4,
+   "evidence": {
+    "left": "COMPLETED",
+    "op": "eq",
+    "right": "COMPLETED"
+   }
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 152,
+   "ts": "2026-10-27T12:00:07.873Z",
+   "type": "step.start",
+   "stepId": "rows",
+   "phase": "observe",
+   "title": "Count the rows OpenETL loaded",
+   "explain": "Asks Postgres directly how many rows are in the table now."
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 153,
+   "ts": "2026-10-27T12:00:07.933Z",
+   "type": "step.log",
+   "stepId": "rows",
+   "line": "connected to openetl-lab-postgres",
+   "level": "info"
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 154,
+   "ts": "2026-10-27T12:00:07.993Z",
+   "type": "step.io",
+   "stepId": "rows",
+   "io": {
+    "kind": "sql",
+    "request": {
+     "target": "openetl-lab-postgres",
+     "text": "SELECT count(*) FROM books"
+    },
+    "response": {
+     "columns": [
+      "count"
+     ],
+     "rows": [
+      [
+       1994
+      ]
+     ],
+     "rowCount": 1,
+     "truncated": false
+    }
+   }
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 155,
+   "ts": "2026-10-27T12:00:08.023Z",
+   "type": "step.end",
+   "stepId": "rows",
+   "phase": "observe",
+   "state": "pass",
+   "ms": 120
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 156,
+   "ts": "2026-10-27T12:00:08.063Z",
+   "type": "step.start",
+   "stepId": "count",
+   "phase": "verify",
+   "title": "Row count equals the known chunk count",
+   "explain": "The 8 books are known to split into 1,997 chunks, and each chunk should become exactly one row."
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 157,
+   "ts": "2026-10-27T12:00:08.103Z",
+   "type": "step.io",
+   "stepId": "count",
+   "io": {
+    "kind": "compare",
+    "request": {
+     "left": 1994,
+     "op": "eq",
+     "right": 1997
+    }
+   }
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 158,
+   "ts": "2026-10-27T12:00:08.133Z",
+   "type": "step.end",
+   "stepId": "count",
+   "phase": "verify",
+   "state": "fail",
+   "ms": 3,
+   "evidence": {
+    "left": 1994,
+    "op": "eq",
+    "right": 1997
+   }
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 159,
+   "ts": "2026-10-27T12:00:08.173Z",
+   "type": "step.start",
+   "stepId": "dupes",
+   "phase": "verify",
+   "title": "No chunk was loaded twice",
+   "explain": "A retry or restart can write the same chunk twice; this counts repeated ids."
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 160,
+   "ts": "2026-10-27T12:00:08.268Z",
+   "type": "step.io",
+   "stepId": "dupes",
+   "io": {
+    "kind": "sql",
+    "request": {
+     "target": "openetl-lab-postgres",
+     "text": "SELECT count(*) - count(DISTINCT id) AS repeats FROM books"
+    },
+    "response": {
+     "columns": [
+      "repeats"
+     ],
+     "rows": [
+      [
+       0
+      ]
+     ],
+     "rowCount": 1,
+     "truncated": false
+    }
+   }
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 161,
+   "ts": "2026-10-27T12:00:08.298Z",
+   "type": "step.end",
+   "stepId": "dupes",
+   "phase": "verify",
+   "state": "pass",
+   "ms": 95
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 162,
+   "ts": "2026-10-27T12:00:08.338Z",
+   "type": "step.start",
+   "stepId": "sample",
+   "phase": "verify",
+   "title": "A sample row has text and a source file",
+   "explain": "Reads three random rows to prove the columns hold real text and a file name, not blanks."
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 163,
+   "ts": "2026-10-27T12:00:08.426Z",
+   "type": "step.io",
+   "stepId": "sample",
+   "io": {
+    "kind": "sql",
+    "request": {
+     "target": "openetl-lab-postgres",
+     "text": "SELECT id, text, source_filename FROM books ORDER BY random() LIMIT 3"
+    },
+    "response": {
+     "columns": [
+      "id",
+      "text",
+      "source_filename"
+     ],
+     "rows": [
+      [
+       1342,
+       "It is a truth universally acknowledged, that a single man in possession of a good fortune, must be in want of a wife.",
+       "pg1342.txt"
+      ],
+      [
+       731,
+       "You will rejoice to hear that no disaster has accompanied the commencement of an enterprise which you have regarded with such evil forebodings.",
+       "pg84.txt"
+      ],
+      [
+       1790,
+       "Call me Ishmael. Some years ago, never mind how long precisely, having little or no money in my purse.",
+       "pg2701.txt"
+      ]
+     ],
+     "rowCount": 3,
+     "truncated": false
+    }
+   }
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 164,
+   "ts": "2026-10-27T12:00:08.456Z",
+   "type": "step.end",
+   "stepId": "sample",
+   "phase": "verify",
+   "state": "pass",
+   "ms": 88
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 165,
+   "ts": "2026-10-27T12:00:08.496Z",
+   "type": "step.start",
+   "stepId": "after",
+   "phase": "verify",
+   "title": "Look at the books table after the run",
+   "explain": "Same query as the first step, so the change is visible side by side."
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 166,
+   "ts": "2026-10-27T12:00:08.588Z",
+   "type": "step.io",
+   "stepId": "after",
+   "io": {
+    "kind": "sql",
+    "request": {
+     "target": "openetl-lab-postgres",
+     "text": "SELECT count(*) AS chunks, count(DISTINCT source_filename) AS files, max(id) AS newest_id FROM books"
+    },
+    "response": {
+     "columns": [
+      "chunks",
+      "files",
+      "newest_id"
+     ],
+     "rows": [
+      [
+       1994,
+       8,
+       2000
+      ]
+     ],
+     "rowCount": 1,
+     "truncated": false
+    }
+   }
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 167,
+   "ts": "2026-10-27T12:00:08.618Z",
+   "type": "step.end",
+   "stepId": "after",
+   "phase": "verify",
+   "state": "pass",
+   "ms": 92
+  },
+  {
+   "runId": "r_20261027_ab12",
+   "seq": 168,
+   "ts": "2026-10-27T12:00:08.638Z",
+   "type": "run.end",
+   "verdict": "Fail",
+   "counts": {
+    "pass": 9,
+    "fail": 1,
+    "blocked": 0,
+    "skipped": 0
+   },
+   "ms": 8618
+  }
+ ]
 }

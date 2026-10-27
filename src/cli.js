@@ -8,12 +8,30 @@ const [cmd, arg] = process.argv.slice(2);
 const { scenarios, errors } = loadScenarios();
 errors.forEach((e) => console.error(`skipped ${e.file}: ${e.error}`));
 
+function ioLines(io) {
+  const out = [];
+  const rq = io.request ?? {};
+  const rqText = rq.text ?? rq.url ?? rq.path ?? rq.container ?? (rq.op ? `${rq.left} ${rq.op} ${rq.right}` : JSON.stringify(rq));
+  out.push(`request  [${io.kind}] ${[rq.method, rq.target, rqText].filter(Boolean).join(' ')}`.slice(0, 300));
+  const r = io.response;
+  if (r) {
+    let sum;
+    if (Array.isArray(r.rows)) sum = `${r.rowCount ?? r.rows.length} row(s)${r.truncated ? ' (truncated)' : ''} ${JSON.stringify(r.rows.slice(0, 2))}`;
+    else if (r.status !== undefined) sum = `HTTP ${r.status} ${String(typeof r.body === 'string' ? r.body : JSON.stringify(r.body)).slice(0, 120)}`;
+    else if (r.exitCode !== undefined) sum = `exit ${r.exitCode} ${JSON.stringify(r.summary ?? {})}`;
+    else sum = JSON.stringify(r);
+    out.push(`response ${sum}`.slice(0, 300));
+  }
+  return out;
+}
+
 function line(ev) {
   const t = ev.ts.slice(11, 19);
   switch (ev.type) {
     case 'run.start': return `${t} RUN   ${ev.scenario.id}  ${ev.scenario.title} (${ev.scenario.steps.length} steps)`;
-    case 'step.start': return `${t} START ${ev.phase.padEnd(8)} ${ev.stepId}  ${ev.title}`;
-    case 'step.log': return `${t}       | ${ev.line}`;
+    case 'step.start': return `${t} START ${ev.phase.padEnd(8)} ${ev.stepId}  ${ev.title}${ev.explain ? `\n${t}       why: ${ev.explain}` : ''}`;
+    case 'step.log': return ev.level === 'detail' ? null : `${t}       | ${ev.line}`;
+    case 'step.io': return ioLines(ev.io).map((l) => `${t}       ${l}`).join('\n');
     case 'step.end': {
       let s = `${t} ${ev.state.toUpperCase().padEnd(7)}${ev.stepId} (${ev.ms}ms)`;
       if (ev.evidence) s += `  ${JSON.stringify(ev.evidence).slice(0, 200)}`;
@@ -55,7 +73,8 @@ if (cmd === 'list') {
   const show = (ev) => {
     if (seen.has(ev.seq)) return;
     seen.add(ev.seq);
-    console.log(line(ev));
+    const text = line(ev);
+    if (text !== null) console.log(text);
     if (ev.type === 'run.end') verdict = ev.verdict;
   };
   scheduler.subscribe(runId, show);

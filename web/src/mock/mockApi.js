@@ -1,5 +1,6 @@
 import sample from './sample-run.json';
 import blocked from './sample-run-blocked.json';
+import passed from './sample-run-pass.json';
 import { replay } from '../replay.js';
 
 // Deterministic 2,000-row catalogue so the list virtualisation is exercised in
@@ -14,7 +15,7 @@ function makeScenarios() {
   const list = [{
     id: sample.events[0].scenario.id, title: sample.events[0].scenario.title,
     tracker_row: 'r047', tags: ['lab', 'postgres', 'baseline'], resources: ['postgres:lab'],
-    stepCount: 8, lastRun: { runId: sample.run.runId, verdict: 'Fail', ts: sample.run.endedAt },
+    stepCount: 10, lastRun: { runId: sample.run.runId, verdict: 'Fail', ts: sample.run.endedAt },
   }];
   for (let i = 2; i <= 2000; i++) {
     const db = DBS[i % DBS.length], what = WHAT[(i * 7) % WHAT.length];
@@ -33,7 +34,7 @@ function makeScenarios() {
 
 const scenarios = makeScenarios();
 const stored = new Map();   // runId -> { run, events }
-for (const s of [sample, blocked]) stored.set(s.run.runId, s);
+for (const s of [sample, blocked, passed]) stored.set(s.run.runId, s);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 let counter = 0;
 
@@ -58,6 +59,8 @@ export const mockApi = {
   },
   async listRuns(scenarioId) {
     await sleep(100);
+    // No scenario id: every stored run (the all-runs history page).
+    if (!scenarioId) return [...stored.values()].map((r) => r.run).sort((a, b) => b.startedAt.localeCompare(a.startedAt));
     const own = [...stored.values()].filter((r) => r.run.scenarioId === scenarioId).map((r) => r.run);
     // Old synthetic history for scenarios other than S01 so the screen is never empty.
     if (scenarioId !== sample.run.scenarioId && !own.length) {

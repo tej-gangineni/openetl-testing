@@ -14,7 +14,7 @@ const OVERSCAN = 6;
 function VirtualList({ items, render }) {
   const ref = useRef(null);
   const [view, setView] = useState({ top: 0, h: 600, w: 1000 });
-  const rowH = view.w < 640 ? 112 : 76;
+  const rowH = view.w < 640 ? 132 : 72;
   useEffect(() => {
     const el = ref.current;
     const measure = () => setView((v) => ({ ...v, h: el.clientHeight, w: el.clientWidth }));
@@ -88,24 +88,26 @@ export default function ScenarioList() {
       {!all && !error && <p className="note">Loading scenarios...</p>}
       {all && shown.length === 0 && <p className="note">No scenarios match.</p>}
       {all && shown.length > 0 && (
-        <VirtualList items={shown} render={(s) => (
-          <div className="srow">
-            <div className="smain">
-              <a className="stitle" href={`#/history/${encodeURIComponent(s.id)}`} title={s.title}>{s.title}</a>
-              <div className="smeta">
-                <code>{s.tracker_row}</code>
-                <span className="sid" title={s.id}>{s.id}</span>
-                <span className="muted">{s.stepCount} steps</span>
+        <div className="stable">
+          <div className="shead" aria-hidden="true"><span>Scenario</span><span>Last result</span><span /></div>
+          <VirtualList items={shown} render={(s) => (
+            <div className="srow">
+              <div className="smain">
+                <a className="stitle" href={`#/history/${encodeURIComponent(s.id)}`} title={s.title}>{s.title}</a>
+                <div className="smeta">
+                  <code>{s.tracker_row}</code>
+                  <span className="muted">{s.stepCount} steps</span>
+                  {s.tags.map((t) => <button key={t} className={`tag ${tags.includes(t) ? 'on' : ''}`} onClick={() => toggle(t)} aria-label={`Filter by ${t}`}>{t}</button>)}
+                </div>
               </div>
-              <div className="stags">{s.tags.map((t) => <span key={t} className="tag">{t}</span>)}</div>
+              <div className="sside">
+                <VerdictBadge verdict={s.lastRun && s.lastRun.verdict} />
+                {s.lastRun && <a className="muted small" href={`#/replay/${encodeURIComponent(s.lastRun.runId)}`}>{fmtTime(s.lastRun.ts)}</a>}
+              </div>
+              <button className="run" disabled={busy === s.id} onClick={() => run(s.id)} aria-label={`Run ${s.title}`}>{busy === s.id ? 'Queuing' : 'Run'}</button>
             </div>
-            <div className="sside">
-              <VerdictBadge verdict={s.lastRun && s.lastRun.verdict} />
-              {s.lastRun && <span className="muted small">{fmtTime(s.lastRun.ts)}</span>}
-            </div>
-            <button className="run" disabled={busy === s.id} onClick={() => run(s.id)} aria-label={`Run ${s.title}`}>{busy === s.id ? 'Queuing' : 'Run'}</button>
-          </div>
-        )} />
+          )} />
+        </div>
       )}
     </section>
   );

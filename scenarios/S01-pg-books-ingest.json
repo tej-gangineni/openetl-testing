@@ -2,32 +2,195 @@
   "id": "S01-pg-books-ingest",
   "title": "Postgres: books load matches the source",
   "tracker_row": "r047",
-  "tags": ["lab", "postgres", "baseline"],
-  "resources": ["postgres:lab"],
+  "summary": "Loads the Gutenberg book text files into the Postgres table books and proves the table matches the source files: every file present, row count equal to what OpenETL reported, and real book text inside.",
+  "flow": {
+    "source": {
+      "kind": "files",
+      "label": "8 Gutenberg book .txt files",
+      "detail": "${lab}/downloads/books"
+    },
+    "engine": {
+      "label": "openetl job run pg_books"
+    },
+    "target": {
+      "kind": "postgres",
+      "label": "Postgres table books",
+      "detail": "openetl-lab-postgres:5433/openetl"
+    }
+  },
+  "tags": [
+    "lab",
+    "postgres",
+    "baseline"
+  ],
+  "resources": [
+    "postgres:lab"
+  ],
   "steps": [
-    { "id": "empty", "phase": "prepare", "title": "Empty the books table",
-      "action": "pg.dropTable", "args": { "table": "books" } },
-    { "id": "src", "phase": "prepare", "title": "Count the source .txt files",
-      "action": "fs.countFiles", "args": { "dir": "${lab}/downloads/books", "glob": "*.txt" }, "save": "srcFiles" },
-    { "id": "run", "phase": "trigger", "title": "Run the pg_books pipeline",
-      "action": "openetl.jobRun", "args": { "pipeline": "${lab}/pipelines/pg_books.toml", "cwd": "${lab}", "extras": ["postgres"] }, "save": "run" },
-    { "id": "status", "phase": "observe", "title": "Job finished with status COMPLETED",
-      "action": "check.compare", "args": { "left": "${run.status}", "op": "eq", "right": "COMPLETED" } },
-    { "id": "warn", "phase": "observe", "title": "Job reported no warnings",
-      "action": "check.compare", "args": { "left": "${run.warnings}", "op": "eq", "right": 0 } },
-    { "id": "files", "phase": "observe", "title": "Job processed every source file",
-      "action": "check.compare", "args": { "left": "${run.files}", "op": "eq", "right": "${srcFiles}" } },
-    { "id": "distinct", "phase": "verify", "title": "Read distinct source files in the books table",
-      "action": "pg.scalar", "args": { "sql": "SELECT count(DISTINCT source_filename) FROM books" }, "save": "distinctFiles" },
-    { "id": "distinctEq", "phase": "verify", "title": "Every source file is present in the table",
-      "action": "check.compare", "args": { "left": "${distinctFiles}", "op": "eq", "right": "${srcFiles}" } },
-    { "id": "count", "phase": "verify", "title": "Read row count of the books table",
-      "action": "pg.scalar", "args": { "sql": "SELECT count(*) FROM books" }, "save": "rowCount" },
-    { "id": "countEq", "phase": "verify", "title": "Row count equals the records OpenETL reported",
-      "action": "check.compare", "args": { "left": "${rowCount}", "op": "eq", "right": "${run.records}" } },
-    { "id": "pride", "phase": "verify", "title": "Count pg1342.txt rows that mention 'Pride and Prejudice'",
-      "action": "pg.scalar", "args": { "sql": "SELECT count(*) FROM books WHERE source_filename='pg1342.txt' AND text ILIKE '%Pride and Prejudice%'" }, "save": "prideRows" },
-    { "id": "prideGt", "phase": "verify", "title": "pg1342.txt text contains 'Pride and Prejudice'",
-      "action": "check.compare", "args": { "left": "${prideRows}", "op": "gt", "right": 0 } }
+    {
+      "id": "empty",
+      "phase": "prepare",
+      "title": "Empty the books table",
+      "explain": "Starts from a clean slate so every row found later was written by this run.",
+      "action": "pg.dropTable",
+      "args": {
+        "table": "books"
+      }
+    },
+    {
+      "id": "src",
+      "phase": "prepare",
+      "title": "Count the source .txt files",
+      "explain": "Counts the input files so the result can be checked against a known number.",
+      "action": "fs.countFiles",
+      "args": {
+        "dir": "${lab}/downloads/books",
+        "glob": "*.txt"
+      },
+      "save": "srcFiles"
+    },
+    {
+      "id": "before",
+      "phase": "prepare",
+      "title": "Read sample rows of books (Before)",
+      "explain": "Shows the table before the run: it was just dropped, so there is nothing to read.",
+      "action": "pg.rows",
+      "args": {
+        "sql": "SELECT source_filename, sequence_index, left(text, 50) AS text_start FROM books ORDER BY source_filename, sequence_index LIMIT 5",
+        "tolerateMissing": true
+      },
+      "compareKey": "books-sample"
+    },
+    {
+      "id": "run",
+      "phase": "trigger",
+      "title": "Run the pg_books pipeline",
+      "explain": "Runs the real pipeline. Everything below checks what it produced.",
+      "action": "openetl.jobRun",
+      "args": {
+        "pipeline": "${lab}/pipelines/pg_books.toml",
+        "cwd": "${lab}",
+        "extras": [
+          "postgres"
+        ]
+      },
+      "save": "run"
+    },
+    {
+      "id": "status",
+      "phase": "observe",
+      "title": "Job finished with status COMPLETED",
+      "explain": "A finished job should say COMPLETED, not PARTIAL or FAILED.",
+      "action": "check.compare",
+      "args": {
+        "left": "${run.status}",
+        "op": "eq",
+        "right": "COMPLETED"
+      }
+    },
+    {
+      "id": "warn",
+      "phase": "observe",
+      "title": "Job reported no warnings",
+      "explain": "Any warning means something was skipped or went wrong along the way.",
+      "action": "check.compare",
+      "args": {
+        "left": "${run.warnings}",
+        "op": "eq",
+        "right": 0
+      }
+    },
+    {
+      "id": "files",
+      "phase": "observe",
+      "title": "Job processed every source file",
+      "explain": "The number of files OpenETL read must equal the files on disk.",
+      "action": "check.compare",
+      "args": {
+        "left": "${run.files}",
+        "op": "eq",
+        "right": "${srcFiles}"
+      }
+    },
+    {
+      "id": "distinct",
+      "phase": "verify",
+      "title": "Read distinct source files in the books table",
+      "explain": "Counts how many different source files landed in the table.",
+      "action": "pg.scalar",
+      "args": {
+        "sql": "SELECT count(DISTINCT source_filename) FROM books"
+      },
+      "save": "distinctFiles"
+    },
+    {
+      "id": "distinctEq",
+      "phase": "verify",
+      "title": "Every source file is present in the table",
+      "explain": "No source file may be missing from the table.",
+      "action": "check.compare",
+      "args": {
+        "left": "${distinctFiles}",
+        "op": "eq",
+        "right": "${srcFiles}"
+      }
+    },
+    {
+      "id": "count",
+      "phase": "verify",
+      "title": "Read row count of the books table",
+      "explain": "The real number of rows in the table.",
+      "action": "pg.scalar",
+      "args": {
+        "sql": "SELECT count(*) FROM books"
+      },
+      "save": "rowCount"
+    },
+    {
+      "id": "countEq",
+      "phase": "verify",
+      "title": "Row count equals the records OpenETL reported",
+      "explain": "What OpenETL says it wrote must equal what the database holds.",
+      "action": "check.compare",
+      "args": {
+        "left": "${rowCount}",
+        "op": "eq",
+        "right": "${run.records}"
+      }
+    },
+    {
+      "id": "pride",
+      "phase": "verify",
+      "title": "Count pg1342.txt rows that mention 'Pride and Prejudice'",
+      "explain": "Looks for known text from one book to prove real content arrived.",
+      "action": "pg.scalar",
+      "args": {
+        "sql": "SELECT count(*) FROM books WHERE source_filename='pg1342.txt' AND text ILIKE '%Pride and Prejudice%'"
+      },
+      "save": "prideRows"
+    },
+    {
+      "id": "prideGt",
+      "phase": "verify",
+      "title": "pg1342.txt text contains 'Pride and Prejudice'",
+      "explain": "At least one row of that book must contain its title.",
+      "action": "check.compare",
+      "args": {
+        "left": "${prideRows}",
+        "op": "gt",
+        "right": 0
+      }
+    },
+    {
+      "id": "after",
+      "phase": "verify",
+      "title": "Read sample rows of books (After)",
+      "explain": "Shows the same read after the run so the change is visible.",
+      "action": "pg.rows",
+      "args": {
+        "sql": "SELECT source_filename, sequence_index, left(text, 50) AS text_start FROM books ORDER BY source_filename, sequence_index LIMIT 5"
+      },
+      "compareKey": "books-sample"
+    }
   ]
 }

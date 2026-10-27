@@ -1,44 +1,53 @@
-import React, { useCallback, useEffect, useReducer, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { api } from '../api.js';
 import { replay } from '../replay.js';
-import { runReducer, initialRun, phaseState, PHASES } from '../reducer.js';
-import { StateIcon, STATE_LABEL, fmtMs, ErrorNote } from './ui.jsx';
-import StepPanel from './StepPanel.jsx';
+import { runReducer, initialRun, counters, touching } from '../reducer.js';
+import { fmtMs, fmtN, ErrorNote } from './ui.jsx';
+import Flow from './Flow.jsx';
+import Timeline from './Timeline.jsx';
 
-function Banner({ run, now, onReplay, canReplay }) {
-  const c = run.counts;
+function Verdict({ run, now, onReplay, canReplay }) {
+  const total = run.order.length;
+  const done = run.order.filter((id) => ['pass', 'fail', 'blocked', 'skipped'].includes(run.steps[id].state)).length;
   if (!run.verdict) {
-    const running = Object.values(run.steps).some((s) => s.state === 'running');
     return (
-      <div className="banner pending" role="status">
-        <strong>{run.scenario ? (running ? 'Running' : 'Starting') : 'Queued'}</strong>
-        <span>{run.scenario ? fmtMs(now - run.rxStart) : 'Waiting for the scheduler to pick this up.'}</span>
+      <div className="verdict pending" role="status">
+        <span className="vword">{run.scenario ? 'Running' : 'Queued'}</span>
+        <span className="vsub">{run.scenario ? `Step ${Math.min(done + 1, total)} of ${total}, ${fmtMs(now - run.rxStart)} so far` : 'Waiting for the scheduler to pick this up.'}</span>
+        {run.scenario && <span className="bar" aria-hidden="true"><i style={{ width: `${(done / Math.max(total, 1)) * 100}%` }} /></span>}
       </div>
     );
   }
+  const c = run.counts || { pass: 0, fail: 0, blocked: 0, skipped: 0 };
+  const lines = { Pass: 'Everything checked out.', Fail: 'At least one check did not match.', Blocked: 'The run could not finish a step.' };
   return (
-    <div className={`banner v-${run.verdict.toLowerCase()}`} role="status">
-      <strong>{run.verdict}</strong>
-      <ul className="counts">
-        <li><b>{c.pass}</b> pass</li><li><b>{c.fail}</b> fail</li><li><b>{c.blocked}</b> blocked</li><li><b>{c.skipped}</b> skipped</li>
+    <div className={`verdict v-${run.verdict.toLowerCase()}`} role="status">
+      <span className="vword">{run.verdict}</span>
+      <span className="vsub">{lines[run.verdict]}{run.note ? ` (${run.note})` : ''}</span>
+      <ul className="vcounts">
+        <li><b>{fmtN(c.pass)}</b> passed</li>
+        {c.fail > 0 && <li className="f"><b>{fmtN(c.fail)}</b> failed</li>}
+        {c.blocked > 0 && <li className="b"><b>{fmtN(c.blocked)}</b> blocked</li>}
+        {c.skipped > 0 && <li><b>{fmtN(c.skipped)}</b> skipped</li>}
+        <li>{fmtMs(run.ms)}</li>
       </ul>
-      <span>{fmtMs(run.ms)}</span>
-      {canReplay && <button className="ghost" onClick={onReplay}>Replay</button>}
+      {canReplay && <button className="ghost" onClick={onReplay}>Replay this run</button>}
     </div>
   );
 }
 
 export default function RunView({ runId, mode }) {
   const [run, dispatch] = useReducer(runReducer, initialRun);
-  const [sel, setSel] = useState(null);
   const [error, setError] = useState('');
   const [now, setNow] = useState(Date.now());
   const events = useRef([]);
   const stop = useRef(() => {});
+  const scrolled = useRef(false);
 
   const feed = useCallback((e) => { dispatch(e); }, []);
   const play = useCallback((evs) => {
     stop.current();
+    scrolled.current = false;
     dispatch({ type: 'reset' });
     stop.current = replay(evs, feed);
   }, [feed]);
@@ -55,13 +64,22 @@ export default function RunView({ runId, mode }) {
 
   useEffect(() => {
     if (run.verdict) return undefined;
-    const t = setInterval(() => setNow(Date.now()), 200);
+    const t = setInterval(() => setNow(Date.now()), 250);
     return () => clearInterval(t);
   }, [run.verdict]);
 
-  const close = useCallback(() => setSel(null), []);
+  // A run that did not pass: bring the first failing step into view.
+  useEffect(() => {
+    if (!run.verdict || run.verdict === 'Pass' || scrolled.current) return;
+    scrolled.current = true;
+    const id = run.order.find((i) => run.steps[i].state === 'fail') || run.order.find((i) => run.steps[i].state === 'blocked');
+    const el = id && document.getElementById(`step-${id}`);
+    if (el) el.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'center' });
+  }, [run.verdict, run.order, run.steps]);
+
   const sc = run.scenario;
-  const step = sel ? run.steps[sel] : null;
+  const count = useMemo(() => counters(run), [run]);
+  const running = !!sc && !run.verdict;
 
   return (
     <section className="page run-page">
@@ -71,45 +89,17 @@ export default function RunView({ runId, mode }) {
         <span>/</span><code>{runId}</code>
         {mode === 'replay' && <span className="chip">Replay</span>}
       </nav>
-      <div className="headrow">
-        <div>
-          <h1>{sc ? sc.title : 'Waiting for run'}</h1>
-          {sc && <p className="muted"><code>{sc.tracker_row}</code> <span className="sid">{sc.id}</span> {sc.tags.map((t) => <span key={t} className="tag">{t}</span>)}</p>}
-        </div>
-      </div>
       {error && <ErrorNote>{error}</ErrorNote>}
-      <Banner run={run} now={now} canReplay={!!run.verdict && events.current.length > 0} onReplay={() => { setSel(null); play(events.current); }} />
-
-      <div className="pipeline" aria-label="Pipeline">
-        {PHASES.map((ph, i) => {
-          const ids = run.order.filter((id) => run.steps[id].phase === ph);
-          const ps = phaseState(run, ph);
-          return (
-            <React.Fragment key={ph}>
-              {i > 0 && <div className={`link ${phaseState(run, PHASES[i - 1]) === 'pass' || ps !== 'waiting' ? 'lit' : ''}`} aria-hidden="true" />}
-              <section className={`phase p-${ps}`} aria-label={ph}>
-                <h3><span>{ph}</span><em>{ids.length}</em></h3>
-                <div className="nodes">
-                  {ids.length === 0 && <p className="muted small empty">{sc ? 'No steps' : '...'}</p>}
-                  {ids.map((id) => {
-                    const s = run.steps[id];
-                    return (
-                      <button key={id} className={`node s-${s.state} ${sel === id ? 'sel' : ''}`} onClick={() => setSel(id)} aria-label={`${s.title}: ${STATE_LABEL[s.state]}`}>
-                        <span className="ico"><StateIcon state={s.state} /></span>
-                        <span className="ntext">
-                          <span className="ntitle">{s.title}</span>
-                          <span className="nsub">{STATE_LABEL[s.state]}{s.ms != null ? ` · ${fmtMs(s.ms)}` : ''}{s.logs.length ? ` · ${s.logs.length} lines` : ''}</span>
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </section>
-            </React.Fragment>
-          );
-        })}
-      </div>
-      <StepPanel step={step} phase={step && step.phase} onClose={close} />
+      <header className="rhead">
+        <div className="rtitle">
+          <h1>{sc ? sc.title : 'Waiting for the run to start'}</h1>
+          {sc && <p className="rmeta"><code>{sc.tracker_row}</code>{(sc.tags || []).map((t) => <span key={t} className="tag">{t}</span>)}</p>}
+          {sc && sc.summary && <p className="summary">{sc.summary}</p>}
+        </div>
+        <Verdict run={run} now={now} canReplay={!!run.verdict && events.current.length > 0} onReplay={() => play(events.current)} />
+      </header>
+      {sc && <Flow flow={sc.flow} touch={running ? touching(run) : null} counts={count} running={running} />}
+      <Timeline run={run} />
     </section>
   );
 }
