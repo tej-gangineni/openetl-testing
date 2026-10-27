@@ -1,0 +1,471 @@
+{
+  "run": {
+    "runId": "r_20261027_ab12",
+    "scenarioId": "S01-pg-books-ingest",
+    "verdict": "Fail",
+    "startedAt": "2026-10-27T12:00:00.000Z",
+    "endedAt": "2026-10-27T12:00:08.011Z"
+  },
+  "events": [
+    {
+      "runId": "r_20261027_ab12",
+      "seq": 0,
+      "ts": "2026-10-27T12:00:00.000Z",
+      "type": "run.start",
+      "scenario": {
+        "id": "S01-pg-books-ingest",
+        "title": "Postgres: books load matches the source",
+        "tracker_row": "r047",
+        "tags": [
+          "lab",
+          "postgres",
+          "baseline"
+        ],
+        "steps": [
+          {
+            "id": "empty",
+            "phase": "prepare",
+            "title": "Empty the books table"
+          },
+          {
+            "id": "src",
+            "phase": "prepare",
+            "title": "Count source files"
+          },
+          {
+            "id": "run",
+            "phase": "trigger",
+            "title": "Run the pipeline"
+          },
+          {
+            "id": "status",
+            "phase": "observe",
+            "title": "Run finished clean"
+          },
+          {
+            "id": "rows",
+            "phase": "observe",
+            "title": "Count rows loaded"
+          },
+          {
+            "id": "count",
+            "phase": "verify",
+            "title": "Row count equals source file count"
+          },
+          {
+            "id": "dupes",
+            "phase": "verify",
+            "title": "No duplicate book ids"
+          },
+          {
+            "id": "sample",
+            "phase": "verify",
+            "title": "Sample row has title and author"
+          }
+        ]
+      }
+    },
+    {
+      "runId": "r_20261027_ab12",
+      "seq": 1,
+      "ts": "2026-10-27T12:00:00.040Z",
+      "type": "step.start",
+      "stepId": "empty",
+      "phase": "prepare",
+      "title": "Empty the books table"
+    },
+    {
+      "runId": "r_20261027_ab12",
+      "seq": 2,
+      "ts": "2026-10-27T12:00:00.143Z",
+      "type": "step.log",
+      "stepId": "empty",
+      "line": "DROP TABLE IF EXISTS books"
+    },
+    {
+      "runId": "r_20261027_ab12",
+      "seq": 3,
+      "ts": "2026-10-27T12:00:00.246Z",
+      "type": "step.log",
+      "stepId": "empty",
+      "line": "table books dropped"
+    },
+    {
+      "runId": "r_20261027_ab12",
+      "seq": 4,
+      "ts": "2026-10-27T12:00:00.349Z",
+      "type": "step.end",
+      "stepId": "empty",
+      "phase": "prepare",
+      "state": "pass",
+      "evidence": {
+        "table": "books",
+        "dropped": true
+      },
+      "ms": 310
+    },
+    {
+      "runId": "r_20261027_ab12",
+      "seq": 5,
+      "ts": "2026-10-27T12:00:00.389Z",
+      "type": "step.start",
+      "stepId": "src",
+      "phase": "prepare",
+      "title": "Count source files"
+    },
+    {
+      "runId": "r_20261027_ab12",
+      "seq": 6,
+      "ts": "2026-10-27T12:00:00.449Z",
+      "type": "step.log",
+      "stepId": "src",
+      "line": "scanning lab/downloads/books/*.txt"
+    },
+    {
+      "runId": "r_20261027_ab12",
+      "seq": 7,
+      "ts": "2026-10-27T12:00:00.509Z",
+      "type": "step.log",
+      "stepId": "src",
+      "line": "1997 files matched"
+    },
+    {
+      "runId": "r_20261027_ab12",
+      "seq": 8,
+      "ts": "2026-10-27T12:00:00.569Z",
+      "type": "step.end",
+      "stepId": "src",
+      "phase": "prepare",
+      "state": "pass",
+      "evidence": {
+        "dir": "lab/downloads/books",
+        "glob": "*.txt",
+        "count": 1997
+      },
+      "ms": 48
+    },
+    {
+      "runId": "r_20261027_ab12",
+      "seq": 9,
+      "ts": "2026-10-27T12:00:00.609Z",
+      "type": "step.start",
+      "stepId": "run",
+      "phase": "trigger",
+      "title": "Run the pipeline"
+    },
+    {
+      "runId": "r_20261027_ab12",
+      "seq": 10,
+      "ts": "2026-10-27T12:00:01.191Z",
+      "type": "step.log",
+      "stepId": "run",
+      "line": "openetl job run pg_books.toml"
+    },
+    {
+      "runId": "r_20261027_ab12",
+      "seq": 11,
+      "ts": "2026-10-27T12:00:01.773Z",
+      "type": "step.log",
+      "stepId": "run",
+      "line": "load plugin: postgres"
+    },
+    {
+      "runId": "r_20261027_ab12",
+      "seq": 12,
+      "ts": "2026-10-27T12:00:02.355Z",
+      "type": "step.log",
+      "stepId": "run",
+      "line": "source: file glob, 1997 inputs"
+    },
+    {
+      "runId": "r_20261027_ab12",
+      "seq": 13,
+      "ts": "2026-10-27T12:00:02.937Z",
+      "type": "step.log",
+      "stepId": "run",
+      "line": "batch 1/4 ... 500 rows"
+    },
+    {
+      "runId": "r_20261027_ab12",
+      "seq": 14,
+      "ts": "2026-10-27T12:00:03.519Z",
+      "type": "step.log",
+      "stepId": "run",
+      "line": "batch 2/4 ... 500 rows"
+    },
+    {
+      "runId": "r_20261027_ab12",
+      "seq": 15,
+      "ts": "2026-10-27T12:00:04.101Z",
+      "type": "step.log",
+      "stepId": "run",
+      "line": "batch 3/4 ... 500 rows"
+    },
+    {
+      "runId": "r_20261027_ab12",
+      "seq": 16,
+      "ts": "2026-10-27T12:00:04.683Z",
+      "type": "step.log",
+      "stepId": "run",
+      "line": "batch 4/4 ... 494 rows"
+    },
+    {
+      "runId": "r_20261027_ab12",
+      "seq": 17,
+      "ts": "2026-10-27T12:00:05.265Z",
+      "type": "step.log",
+      "stepId": "run",
+      "line": "sink flushed, 1994 rows written"
+    },
+    {
+      "runId": "r_20261027_ab12",
+      "seq": 18,
+      "ts": "2026-10-27T12:00:05.847Z",
+      "type": "step.log",
+      "stepId": "run",
+      "line": "3 inputs rejected: empty body"
+    },
+    {
+      "runId": "r_20261027_ab12",
+      "seq": 19,
+      "ts": "2026-10-27T12:00:06.429Z",
+      "type": "step.log",
+      "stepId": "run",
+      "line": "status COMPLETED"
+    },
+    {
+      "runId": "r_20261027_ab12",
+      "seq": 20,
+      "ts": "2026-10-27T12:00:07.011Z",
+      "type": "step.end",
+      "stepId": "run",
+      "phase": "trigger",
+      "state": "pass",
+      "evidence": {
+        "status": "COMPLETED",
+        "rows_written": 1994,
+        "rejected": 3
+      },
+      "ms": 6400
+    },
+    {
+      "runId": "r_20261027_ab12",
+      "seq": 21,
+      "ts": "2026-10-27T12:00:07.051Z",
+      "type": "step.start",
+      "stepId": "status",
+      "phase": "observe",
+      "title": "Run finished clean"
+    },
+    {
+      "runId": "r_20261027_ab12",
+      "seq": 22,
+      "ts": "2026-10-27T12:00:07.111Z",
+      "type": "step.log",
+      "stepId": "status",
+      "line": "compare COMPLETED eq COMPLETED"
+    },
+    {
+      "runId": "r_20261027_ab12",
+      "seq": 23,
+      "ts": "2026-10-27T12:00:07.171Z",
+      "type": "step.end",
+      "stepId": "status",
+      "phase": "observe",
+      "state": "pass",
+      "evidence": {
+        "left": "COMPLETED",
+        "op": "eq",
+        "right": "COMPLETED"
+      },
+      "ms": 4
+    },
+    {
+      "runId": "r_20261027_ab12",
+      "seq": 24,
+      "ts": "2026-10-27T12:00:07.211Z",
+      "type": "step.start",
+      "stepId": "rows",
+      "phase": "observe",
+      "title": "Count rows loaded"
+    },
+    {
+      "runId": "r_20261027_ab12",
+      "seq": 25,
+      "ts": "2026-10-27T12:00:07.271Z",
+      "type": "step.log",
+      "stepId": "rows",
+      "line": "sql: SELECT count(*) FROM books"
+    },
+    {
+      "runId": "r_20261027_ab12",
+      "seq": 26,
+      "ts": "2026-10-27T12:00:07.331Z",
+      "type": "step.log",
+      "stepId": "rows",
+      "line": "scalar: 1994"
+    },
+    {
+      "runId": "r_20261027_ab12",
+      "seq": 27,
+      "ts": "2026-10-27T12:00:07.391Z",
+      "type": "step.end",
+      "stepId": "rows",
+      "phase": "observe",
+      "state": "pass",
+      "evidence": {
+        "sql": "SELECT count(*) FROM books",
+        "rows": [
+          [
+            1994
+          ]
+        ]
+      },
+      "ms": 120
+    },
+    {
+      "runId": "r_20261027_ab12",
+      "seq": 28,
+      "ts": "2026-10-27T12:00:07.431Z",
+      "type": "step.start",
+      "stepId": "count",
+      "phase": "verify",
+      "title": "Row count equals source file count"
+    },
+    {
+      "runId": "r_20261027_ab12",
+      "seq": 29,
+      "ts": "2026-10-27T12:00:07.491Z",
+      "type": "step.log",
+      "stepId": "count",
+      "line": "compare 1994 eq 1997"
+    },
+    {
+      "runId": "r_20261027_ab12",
+      "seq": 30,
+      "ts": "2026-10-27T12:00:07.551Z",
+      "type": "step.end",
+      "stepId": "count",
+      "phase": "verify",
+      "state": "fail",
+      "evidence": {
+        "left": 1994,
+        "op": "eq",
+        "right": 1997
+      },
+      "ms": 3
+    },
+    {
+      "runId": "r_20261027_ab12",
+      "seq": 31,
+      "ts": "2026-10-27T12:00:07.591Z",
+      "type": "step.start",
+      "stepId": "dupes",
+      "phase": "verify",
+      "title": "No duplicate book ids"
+    },
+    {
+      "runId": "r_20261027_ab12",
+      "seq": 32,
+      "ts": "2026-10-27T12:00:07.651Z",
+      "type": "step.log",
+      "stepId": "dupes",
+      "line": "sql: SELECT count(*) - count(DISTINCT book_id) FROM books"
+    },
+    {
+      "runId": "r_20261027_ab12",
+      "seq": 33,
+      "ts": "2026-10-27T12:00:07.711Z",
+      "type": "step.log",
+      "stepId": "dupes",
+      "line": "scalar: 0"
+    },
+    {
+      "runId": "r_20261027_ab12",
+      "seq": 34,
+      "ts": "2026-10-27T12:00:07.771Z",
+      "type": "step.end",
+      "stepId": "dupes",
+      "phase": "verify",
+      "state": "pass",
+      "evidence": {
+        "sql": "SELECT count(*) - count(DISTINCT book_id) FROM books",
+        "rows": [
+          [
+            0
+          ]
+        ]
+      },
+      "ms": 95
+    },
+    {
+      "runId": "r_20261027_ab12",
+      "seq": 35,
+      "ts": "2026-10-27T12:00:07.811Z",
+      "type": "step.start",
+      "stepId": "sample",
+      "phase": "verify",
+      "title": "Sample row has title and author"
+    },
+    {
+      "runId": "r_20261027_ab12",
+      "seq": 36,
+      "ts": "2026-10-27T12:00:07.871Z",
+      "type": "step.log",
+      "stepId": "sample",
+      "line": "sql: SELECT book_id, title, author FROM books ORDER BY random() LIMIT 3"
+    },
+    {
+      "runId": "r_20261027_ab12",
+      "seq": 37,
+      "ts": "2026-10-27T12:00:07.931Z",
+      "type": "step.log",
+      "stepId": "sample",
+      "line": "3 rows"
+    },
+    {
+      "runId": "r_20261027_ab12",
+      "seq": 38,
+      "ts": "2026-10-27T12:00:07.991Z",
+      "type": "step.end",
+      "stepId": "sample",
+      "phase": "verify",
+      "state": "pass",
+      "evidence": {
+        "sql": "SELECT book_id, title, author FROM books ORDER BY random() LIMIT 3",
+        "rows": [
+          {
+            "book_id": 1342,
+            "title": "Pride and Prejudice",
+            "author": "Austen, Jane"
+          },
+          {
+            "book_id": 84,
+            "title": "Frankenstein",
+            "author": "Shelley, Mary Wollstonecraft"
+          },
+          {
+            "book_id": 2701,
+            "title": "Moby Dick",
+            "author": "Melville, Herman"
+          }
+        ]
+      },
+      "ms": 88
+    },
+    {
+      "runId": "r_20261027_ab12",
+      "seq": 39,
+      "ts": "2026-10-27T12:00:08.011Z",
+      "type": "run.end",
+      "verdict": "Fail",
+      "counts": {
+        "pass": 7,
+        "fail": 1,
+        "blocked": 0,
+        "skipped": 0
+      },
+      "ms": 7991
+    }
+  ]
+}
