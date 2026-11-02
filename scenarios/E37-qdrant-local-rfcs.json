@@ -1,0 +1,219 @@
+{
+  "id": "E37-qdrant-local-rfcs",
+  "title": "Qdrant via API: 2 RFC files become points that match the source",
+  "tracker_row": "api-E37",
+  "summary": "Submits local (rfc791.txt and rfc793.txt) -> Qdrant collection e2e_rfcs through the API and checks points equal records reported, the collection has the configured vector size, and both files are represented in the payloads.",
+  "flow": {
+    "source": {
+      "kind": "files",
+      "label": "2 RFC text files",
+      "detail": "${lab}/downloads/rfc/rfc79*.txt"
+    },
+    "engine": {
+      "label": "POST /api/v1/jobs (local -> qdrant)"
+    },
+    "target": {
+      "kind": "qdrant",
+      "label": "collection e2e_rfcs",
+      "detail": "127.0.0.1:6333"
+    }
+  },
+  "tags": [
+    "api",
+    "lab-db"
+  ],
+  "resources": [
+    "openetl:api",
+    "qdrant:lab"
+  ],
+  "steps": [
+    {
+      "id": "drop",
+      "phase": "prepare",
+      "title": "Delete collection e2e_rfcs",
+      "explain": "Starts clean.",
+      "action": "qdrant.dropCollection",
+      "args": {
+        "collection": "e2e_rfcs"
+      }
+    },
+    {
+      "id": "srcFiles",
+      "phase": "prepare",
+      "title": "Count matching source files",
+      "explain": "The filter should select these files only.",
+      "action": "fs.countFiles",
+      "args": {
+        "dir": "${lab}/downloads/rfc",
+        "glob": "rfc79*.txt"
+      },
+      "save": "srcFiles"
+    },
+    {
+      "id": "runSubmit",
+      "phase": "trigger",
+      "title": "Submit the job through the API",
+      "explain": "POST /api/v1/jobs with the TOML base64-encoded, exactly as the console does.",
+      "action": "openetl.api.submitJob",
+      "args": {
+        "specFile": "scenarios/e2e/E37.toml",
+        "name": "e2e_E37_qdrant_rfcs"
+      },
+      "save": "runSub"
+    },
+    {
+      "id": "runWait",
+      "phase": "observe",
+      "title": "Wait for the run to finish",
+      "explain": "Polls the task result and GET /api/v1/runs until this run reaches a terminal status.",
+      "action": "openetl.api.waitRun",
+      "args": {
+        "name": "e2e_E37_qdrant_rfcs",
+        "after": "${runSub.submittedAt}",
+        "taskId": "${runSub.taskId}",
+        "timeoutSec": 300
+      },
+      "save": "run"
+    },
+    {
+      "id": "runStatus",
+      "phase": "observe",
+      "title": "Run finished COMPLETED",
+      "explain": "A clean run must report COMPLETED, not PARTIAL or FAILED.",
+      "action": "check.compare",
+      "args": {
+        "left": "${run.status}",
+        "op": "eq",
+        "right": "COMPLETED"
+      }
+    },
+    {
+      "id": "runDeliv",
+      "phase": "observe",
+      "title": "Delivered equals records read",
+      "explain": "Every record the run read must be reported as delivered to the sink.",
+      "action": "check.compare",
+      "args": {
+        "left": "${run.delivered}",
+        "op": "eq",
+        "right": "${run.records}"
+      }
+    },
+    {
+      "id": "runFailed",
+      "phase": "observe",
+      "title": "No record failed",
+      "explain": "records_failed must be 0 on a clean run.",
+      "action": "check.compare",
+      "args": {
+        "left": "${run.failed}",
+        "op": "eq",
+        "right": 0
+      }
+    },
+    {
+      "id": "runRecs",
+      "phase": "observe",
+      "title": "The run read some records",
+      "explain": "A run that reads nothing proves nothing.",
+      "action": "check.compare",
+      "args": {
+        "left": "${run.records}",
+        "op": "gt",
+        "right": 0
+      }
+    },
+    {
+      "id": "files",
+      "phase": "observe",
+      "title": "Run read exactly the matching files",
+      "explain": "Files read must equal matching files.",
+      "action": "check.compare",
+      "args": {
+        "left": "${run.files}",
+        "op": "eq",
+        "right": "${srcFiles}"
+      }
+    },
+    {
+      "id": "count",
+      "phase": "verify",
+      "title": "Count points in e2e_rfcs",
+      "explain": "The real number of points written.",
+      "action": "qdrant.count",
+      "args": {
+        "collection": "e2e_rfcs"
+      },
+      "save": "pts"
+    },
+    {
+      "id": "ptsEq",
+      "phase": "verify",
+      "title": "Points equal records reported",
+      "explain": "The collection must hold what the run delivered.",
+      "action": "check.compare",
+      "args": {
+        "left": "${pts}",
+        "op": "eq",
+        "right": "${run.records}"
+      }
+    },
+    {
+      "id": "info",
+      "phase": "verify",
+      "title": "Read the collection settings",
+      "explain": "The vector size must be the one configured.",
+      "action": "qdrant.collectionInfo",
+      "args": {
+        "collection": "e2e_rfcs"
+      },
+      "save": "info"
+    },
+    {
+      "id": "dim",
+      "phase": "verify",
+      "title": "Vector size is 384",
+      "explain": "vector_size = 384 in the TOML.",
+      "action": "check.compare",
+      "args": {
+        "left": "${info.size}",
+        "op": "eq",
+        "right": 384
+      }
+    },
+    {
+      "id": "stats",
+      "phase": "verify",
+      "title": "Scan payloads for source files",
+      "explain": "Every file must be represented.",
+      "action": "qdrant.stats",
+      "args": {
+        "collection": "e2e_rfcs"
+      },
+      "save": "qs"
+    },
+    {
+      "id": "perFile",
+      "phase": "verify",
+      "title": "Both files are represented",
+      "explain": "No file lost.",
+      "action": "check.compare",
+      "args": {
+        "left": "${qs.sources.length}",
+        "op": "eq",
+        "right": "${srcFiles}"
+      }
+    },
+    {
+      "id": "clean",
+      "phase": "verify",
+      "title": "Delete collection e2e_rfcs",
+      "explain": "Removes the test collection.",
+      "action": "qdrant.dropCollection",
+      "args": {
+        "collection": "e2e_rfcs"
+      },
+      "always": true
+    }
+  ]
+}

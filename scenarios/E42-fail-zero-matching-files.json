@@ -1,0 +1,141 @@
+{
+  "id": "E42-fail-zero-matching-files",
+  "title": "Failure: zero matching files (records what status is reported)",
+  "tracker_row": "api-E42",
+  "summary": "Submits local -> jsonl with a filter that matches no file in an existing folder, and records what OpenETL reports: the status, zero files and zero records, and that nothing was written.",
+  "flow": {
+    "source": {
+      "kind": "files",
+      "label": "users folder, filter *.nomatch",
+      "detail": "${lab}/downloads/json-items/users"
+    },
+    "engine": {
+      "label": "POST /api/v1/jobs (local -> jsonl)"
+    },
+    "target": {
+      "kind": "files",
+      "label": "out.jsonl",
+      "detail": "${lab}/state/e2e/e42-*"
+    }
+  },
+  "tags": [
+    "api",
+    "failure"
+  ],
+  "resources": [
+    "openetl:api"
+  ],
+  "steps": [
+    {
+      "id": "out",
+      "phase": "prepare",
+      "title": "Create a fresh output folder",
+      "explain": "A JSONL sink appends, so each run needs an empty file.",
+      "action": "fixture.outDir",
+      "args": {
+        "name": "e42"
+      },
+      "save": "out"
+    },
+    {
+      "id": "runSubmit",
+      "phase": "trigger",
+      "title": "Submit the job through the API",
+      "explain": "POST /api/v1/jobs with the TOML base64-encoded, exactly as the console does.",
+      "action": "openetl.api.submitJob",
+      "args": {
+        "specFile": "scenarios/e2e/E42.toml",
+        "name": "e2e_E42_zero_files"
+      },
+      "save": "runSub"
+    },
+    {
+      "id": "runWait",
+      "phase": "observe",
+      "title": "Wait for the run to finish",
+      "explain": "Polls the task result and GET /api/v1/runs until this run reaches a terminal status.",
+      "action": "openetl.api.waitRun",
+      "args": {
+        "name": "e2e_E42_zero_files",
+        "after": "${runSub.submittedAt}",
+        "taskId": "${runSub.taskId}",
+        "timeoutSec": 300
+      },
+      "save": "run"
+    },
+    {
+      "id": "status",
+      "phase": "observe",
+      "title": "Status is a terminal state (recorded)",
+      "explain": "Records which status OpenETL reports for a run with nothing to read.",
+      "action": "check.compare",
+      "args": {
+        "left": [
+          "COMPLETED",
+          "PARTIAL",
+          "FAILED"
+        ],
+        "op": "contains",
+        "right": "${run.status}"
+      }
+    },
+    {
+      "id": "files",
+      "phase": "observe",
+      "title": "Zero files read",
+      "explain": "No file matches the filter.",
+      "action": "check.compare",
+      "args": {
+        "left": "${run.files}",
+        "op": "eq",
+        "right": 0
+      }
+    },
+    {
+      "id": "records",
+      "phase": "observe",
+      "title": "Zero records",
+      "explain": "Nothing to read means nothing extracted.",
+      "action": "check.compare",
+      "args": {
+        "left": "${run.records}",
+        "op": "eq",
+        "right": 0
+      }
+    },
+    {
+      "id": "stats",
+      "phase": "verify",
+      "title": "Read the JSONL output",
+      "explain": "Nothing may be written.",
+      "action": "fs.jsonlStats",
+      "args": {
+        "file": "${out.file}"
+      },
+      "save": "jl"
+    },
+    {
+      "id": "lines",
+      "phase": "verify",
+      "title": "Output has no lines",
+      "explain": "No data in, no data out.",
+      "action": "check.compare",
+      "args": {
+        "left": "${jl.lines}",
+        "op": "eq",
+        "right": 0
+      }
+    },
+    {
+      "id": "clean",
+      "phase": "verify",
+      "title": "Remove the output folder",
+      "explain": "Leaves no test files behind.",
+      "action": "fs.removeE2e",
+      "args": {
+        "path": "${out.dir}"
+      },
+      "always": true
+    }
+  ]
+}

@@ -1,0 +1,252 @@
+{
+  "id": "E26-pg-local-users",
+  "title": "Postgres via API: 10 user JSON files become rows that match the source",
+  "tracker_row": "api-E26",
+  "summary": "Submits local (10 user JSON files) -> postgres table e2e_users through the API and checks the table against the source: rows equal the records the run reported, every file is represented, every row carries this run id, and a known email lands exactly once.",
+  "flow": {
+    "source": {
+      "kind": "files",
+      "label": "10 user .json files",
+      "detail": "${lab}/downloads/json-items/users"
+    },
+    "engine": {
+      "label": "POST /api/v1/jobs (local -> postgres)"
+    },
+    "target": {
+      "kind": "postgres",
+      "label": "table e2e_users",
+      "detail": "127.0.0.1:5433/openetl"
+    }
+  },
+  "tags": [
+    "api",
+    "lab-db"
+  ],
+  "resources": [
+    "openetl:api",
+    "postgres:lab"
+  ],
+  "steps": [
+    {
+      "id": "drop",
+      "phase": "prepare",
+      "title": "Drop e2e_users",
+      "explain": "Starts clean so every row counted later was written by this run.",
+      "action": "pg.dropTable",
+      "args": {
+        "table": "e2e_users"
+      }
+    },
+    {
+      "id": "srcFiles",
+      "phase": "prepare",
+      "title": "Count source files",
+      "explain": "One user per file.",
+      "action": "fs.countFiles",
+      "args": {
+        "dir": "${lab}/downloads/json-items/users",
+        "glob": "*.json"
+      },
+      "save": "srcFiles"
+    },
+    {
+      "id": "runSubmit",
+      "phase": "trigger",
+      "title": "Submit the job through the API",
+      "explain": "POST /api/v1/jobs with the TOML base64-encoded, exactly as the console does.",
+      "action": "openetl.api.submitJob",
+      "args": {
+        "specFile": "scenarios/e2e/E26.toml",
+        "name": "e2e_E26_pg_users"
+      },
+      "save": "runSub"
+    },
+    {
+      "id": "runWait",
+      "phase": "observe",
+      "title": "Wait for the run to finish",
+      "explain": "Polls the task result and GET /api/v1/runs until this run reaches a terminal status.",
+      "action": "openetl.api.waitRun",
+      "args": {
+        "name": "e2e_E26_pg_users",
+        "after": "${runSub.submittedAt}",
+        "taskId": "${runSub.taskId}",
+        "timeoutSec": 300
+      },
+      "save": "run"
+    },
+    {
+      "id": "runStatus",
+      "phase": "observe",
+      "title": "Run finished COMPLETED",
+      "explain": "A clean run must report COMPLETED, not PARTIAL or FAILED.",
+      "action": "check.compare",
+      "args": {
+        "left": "${run.status}",
+        "op": "eq",
+        "right": "COMPLETED"
+      }
+    },
+    {
+      "id": "runDeliv",
+      "phase": "observe",
+      "title": "Delivered equals records read",
+      "explain": "Every record the run read must be reported as delivered to the sink.",
+      "action": "check.compare",
+      "args": {
+        "left": "${run.delivered}",
+        "op": "eq",
+        "right": "${run.records}"
+      }
+    },
+    {
+      "id": "runFailed",
+      "phase": "observe",
+      "title": "No record failed",
+      "explain": "records_failed must be 0 on a clean run.",
+      "action": "check.compare",
+      "args": {
+        "left": "${run.failed}",
+        "op": "eq",
+        "right": 0
+      }
+    },
+    {
+      "id": "runRecs",
+      "phase": "observe",
+      "title": "The run read some records",
+      "explain": "A run that reads nothing proves nothing.",
+      "action": "check.compare",
+      "args": {
+        "left": "${run.records}",
+        "op": "gt",
+        "right": 0
+      }
+    },
+    {
+      "id": "files",
+      "phase": "observe",
+      "title": "Run read every source file",
+      "explain": "Files read must equal files on disk.",
+      "action": "check.compare",
+      "args": {
+        "left": "${run.files}",
+        "op": "eq",
+        "right": "${srcFiles}"
+      }
+    },
+    {
+      "id": "count",
+      "phase": "verify",
+      "title": "Count rows in e2e_users",
+      "explain": "The real number of rows the sink wrote.",
+      "action": "pg.scalar",
+      "args": {
+        "sql": "SELECT count(*) FROM e2e_users"
+      },
+      "save": "rows"
+    },
+    {
+      "id": "rowsEq",
+      "phase": "verify",
+      "title": "Rows equal records reported",
+      "explain": "The table must hold exactly what the run says it delivered.",
+      "action": "check.compare",
+      "args": {
+        "left": "${rows}",
+        "op": "eq",
+        "right": "${run.records}"
+      }
+    },
+    {
+      "id": "perFile",
+      "phase": "verify",
+      "title": "Count distinct source files in the table",
+      "explain": "Every source file must be represented.",
+      "action": "pg.scalar",
+      "args": {
+        "sql": "SELECT count(DISTINCT source_filename) FROM e2e_users"
+      },
+      "save": "df"
+    },
+    {
+      "id": "perFileEq",
+      "phase": "verify",
+      "title": "Distinct files equal source files",
+      "explain": "No file lost.",
+      "action": "check.compare",
+      "args": {
+        "left": "${df}",
+        "op": "eq",
+        "right": "${srcFiles}"
+      }
+    },
+    {
+      "id": "runId",
+      "phase": "verify",
+      "title": "Count rows stamped with this run id",
+      "explain": "Provenance: rows must say which run wrote them.",
+      "action": "pg.scalar",
+      "args": {
+        "sql": "SELECT count(*) FROM e2e_users WHERE job_run_id = '${run.run_id}'"
+      },
+      "save": "rid"
+    },
+    {
+      "id": "runIdEq",
+      "phase": "verify",
+      "title": "All rows carry this run id",
+      "explain": "Every row came from this run.",
+      "action": "check.compare",
+      "args": {
+        "left": "${rid}",
+        "op": "eq",
+        "right": "${rows}"
+      }
+    },
+    {
+      "id": "spot",
+      "phase": "verify",
+      "title": "Find the user Sincere@april.biz",
+      "explain": "Spot-check that real field values arrived.",
+      "action": "pg.scalar",
+      "args": {
+        "sql": "SELECT count(*) FROM e2e_users WHERE text LIKE '%Sincere@april.biz%'"
+      },
+      "save": "spot"
+    },
+    {
+      "id": "spotEq",
+      "phase": "verify",
+      "title": "Exactly one row holds that email",
+      "explain": "The user is in the source once.",
+      "action": "check.compare",
+      "args": {
+        "left": "${spot}",
+        "op": "eq",
+        "right": 1
+      }
+    },
+    {
+      "id": "sample",
+      "phase": "verify",
+      "title": "Show sample rows",
+      "explain": "Evidence of what the rows contain.",
+      "action": "pg.rows",
+      "args": {
+        "sql": "SELECT source_filename, element_type, left(text, 80) AS text FROM e2e_users ORDER BY source_filename LIMIT 5"
+      }
+    },
+    {
+      "id": "clean",
+      "phase": "verify",
+      "title": "Drop e2e_users",
+      "explain": "Removes the test table.",
+      "action": "pg.dropTable",
+      "args": {
+        "table": "e2e_users"
+      },
+      "always": true
+    }
+  ]
+}

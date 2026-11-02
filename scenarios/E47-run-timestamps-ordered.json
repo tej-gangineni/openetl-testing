@@ -1,0 +1,126 @@
+{
+  "id": "E47-run-timestamps-ordered",
+  "title": "Run model: run timestamps are ordered and consistent",
+  "tracker_row": "api-E47",
+  "summary": "Submits a job and checks the run record times: the run started after it was submitted, completed after it started, and the manifest elapsed time agrees with completed minus started.",
+  "flow": {
+    "source": {
+      "kind": "files",
+      "label": "10 user .json files",
+      "detail": "${lab}/downloads/json-items/users"
+    },
+    "engine": {
+      "label": "POST /api/v1/jobs"
+    },
+    "target": {
+      "kind": "http",
+      "label": "run record",
+      "detail": "started_at, completed_at"
+    }
+  },
+  "tags": [
+    "api",
+    "run-model"
+  ],
+  "resources": [
+    "openetl:api"
+  ],
+  "steps": [
+    {
+      "id": "out",
+      "phase": "prepare",
+      "title": "Create a fresh output folder",
+      "explain": "A clean place for the sink.",
+      "action": "fixture.outDir",
+      "args": {
+        "name": "e47"
+      },
+      "save": "out"
+    },
+    {
+      "id": "runSubmit",
+      "phase": "trigger",
+      "title": "Submit the job through the API",
+      "explain": "POST /api/v1/jobs with the TOML base64-encoded, exactly as the console does.",
+      "action": "openetl.api.submitJob",
+      "args": {
+        "specFile": "scenarios/e2e/E47.toml",
+        "name": "e2e_E47_timestamps"
+      },
+      "save": "runSub"
+    },
+    {
+      "id": "runWait",
+      "phase": "observe",
+      "title": "Wait for the run to finish",
+      "explain": "Polls the task result and GET /api/v1/runs until this run reaches a terminal status.",
+      "action": "openetl.api.waitRun",
+      "args": {
+        "name": "e2e_E47_timestamps",
+        "after": "${runSub.submittedAt}",
+        "taskId": "${runSub.taskId}",
+        "timeoutSec": 300
+      },
+      "save": "run"
+    },
+    {
+      "id": "status",
+      "phase": "observe",
+      "title": "Run COMPLETED",
+      "explain": "Timestamps are checked on a clean run.",
+      "action": "check.compare",
+      "args": {
+        "left": "${run.status}",
+        "op": "eq",
+        "right": "COMPLETED"
+      }
+    },
+    {
+      "id": "startAfterSubmit",
+      "phase": "verify",
+      "title": "started_at is not before the submit time",
+      "explain": "A run cannot start before it was submitted (same machine clock).",
+      "action": "check.compare",
+      "args": {
+        "left": "${run.startedMs}",
+        "op": "gte",
+        "right": "${runSub.submittedMs}"
+      }
+    },
+    {
+      "id": "endAfterStart",
+      "phase": "verify",
+      "title": "completed_at is not before started_at",
+      "explain": "A run cannot end before it starts.",
+      "action": "check.compare",
+      "args": {
+        "left": "${run.completedMs}",
+        "op": "gte",
+        "right": "${run.startedMs}"
+      }
+    },
+    {
+      "id": "elapsed",
+      "phase": "verify",
+      "title": "elapsed_s agrees with completed minus started (within 1 s)",
+      "explain": "The manifest duration must describe the same run as the record times.",
+      "action": "check.compare",
+      "args": {
+        "left": "${run.elapsedGapMs}",
+        "op": "lte",
+        "right": 1000
+      }
+    },
+    {
+      "id": "clean",
+      "phase": "verify",
+      "title": "Remove the output folder",
+      "explain": "Leaves no test files behind.",
+      "action": "fs.removeE2e",
+      "args": {
+        "path": "${out.dir}"
+      },
+      "always": true
+    }
+  ]
+}

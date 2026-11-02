@@ -1,0 +1,92 @@
+{
+  "id": "E40-fail-es-closed-port",
+  "title": "Failure: an Elasticsearch sink on a closed port does not complete",
+  "tracker_row": "api-E40",
+  "summary": "Submits local -> elasticsearch at 127.0.0.1:9299, where nothing listens. The job must not be COMPLETED and the error must say the connection failed.",
+  "flow": {
+    "source": {
+      "kind": "files",
+      "label": "10 user .json files",
+      "detail": "${lab}/downloads/json-items/users"
+    },
+    "engine": {
+      "label": "POST /api/v1/jobs (local -> elasticsearch :9299)"
+    },
+    "target": {
+      "kind": "elasticsearch",
+      "label": "closed port",
+      "detail": "127.0.0.1:9299"
+    }
+  },
+  "tags": [
+    "api",
+    "failure"
+  ],
+  "resources": [
+    "openetl:api"
+  ],
+  "steps": [
+    {
+      "id": "runSubmit",
+      "phase": "trigger",
+      "title": "Submit the job through the API",
+      "explain": "POST /api/v1/jobs with the TOML base64-encoded, exactly as the console does.",
+      "action": "openetl.api.submitJob",
+      "args": {
+        "specFile": "scenarios/e2e/E40.toml",
+        "name": "e2e_E40_es_closed_port"
+      },
+      "save": "runSub"
+    },
+    {
+      "id": "runWait",
+      "phase": "observe",
+      "title": "Wait for the run to finish",
+      "explain": "Polls the task result and GET /api/v1/runs until this run reaches a terminal status.",
+      "action": "openetl.api.waitRun",
+      "args": {
+        "name": "e2e_E40_es_closed_port",
+        "after": "${runSub.submittedAt}",
+        "taskId": "${runSub.taskId}",
+        "timeoutSec": 300
+      },
+      "save": "run"
+    },
+    {
+      "id": "status",
+      "phase": "observe",
+      "title": "Job is not COMPLETED",
+      "explain": "Nothing can be delivered to a closed port.",
+      "action": "check.compare",
+      "args": {
+        "left": "${run.status}",
+        "op": "ne",
+        "right": "COMPLETED"
+      }
+    },
+    {
+      "id": "deliv",
+      "phase": "observe",
+      "title": "Nothing reported as delivered",
+      "explain": "records_delivered must not be above 0.",
+      "action": "check.compare",
+      "args": {
+        "left": "${run.delivered}",
+        "op": "ne",
+        "right": "${run.records}"
+      }
+    },
+    {
+      "id": "err",
+      "phase": "observe",
+      "title": "Error names the connection problem",
+      "explain": "The user must see the real cause.",
+      "action": "check.compare",
+      "args": {
+        "left": "${run.error}",
+        "op": "contains",
+        "right": "9299"
+      }
+    }
+  ]
+}

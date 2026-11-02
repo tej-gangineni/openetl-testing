@@ -1,0 +1,21 @@
+name = "e2e_E37_qdrant_rfcs"
+
+[[sources]]
+id = "files"
+type = "local"
+mode = "full_refresh"
+path = "${lab}/downloads/rfc"
+filter = "rfc79*.txt"
+
+[[transforms]]
+type = "extract"
+strategy = "fast"
+entities = false
+
+[[sinks]]
+id = "out"
+type = "qdrant"
+write_mode = "append"
+collection = "e2e_rfcs"
+url = "http://127.0.0.1:6333"
+vector_size = 384

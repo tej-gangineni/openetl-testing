@@ -1,0 +1,19 @@
+name = "e2e_E49_retry"
+
+[[sources]]
+id = "files"
+type = "local"
+mode = "full_refresh"
+path = "${src.dir}"
+filter = "*.html"
+
+[[transforms]]
+type = "extract"
+strategy = "fast"
+entities = false
+
+[[sinks]]
+id = "relata-1"
+type = "relata"
+server_url = "http://localhost:9090"
+token = "e2e-invalid-token-E49"

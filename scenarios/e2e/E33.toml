@@ -1,0 +1,19 @@
+name = "e2e_E33_mongo_http"
+
+[[sources]]
+id = "page"
+type = "http"
+url = "http://127.0.0.1:8765/pages/Domain_Name_System.html"
+
+[[transforms]]
+type = "extract"
+strategy = "fast"
+entities = false
+
+[[sinks]]
+id = "out"
+type = "mongodb"
+write_mode = "append"
+collection = "e2e_http_page"
+uri = "mongodb://127.0.0.1:27017"
+database = "openetl"

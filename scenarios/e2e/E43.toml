@@ -1,0 +1,5 @@
+name = "e2e_E43_invalid_toml"
+
+[[sources]
+id = "files"
+type = = "local"

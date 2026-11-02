@@ -1,0 +1,23 @@
+name = "e2e_E25_two_sinks"
+
+[[sources]]
+id = "files"
+type = "local"
+mode = "full_refresh"
+path = "${src.dir}"
+filter = "*.html"
+
+[[transforms]]
+type = "extract"
+strategy = "fast"
+entities = false
+
+[[sinks]]
+id = "relata-e2e"
+type = "relata"
+server_url = "http://localhost:9090"
+
+[[sinks]]
+id = "jsonl-e2e"
+type = "jsonl"
+path = "${out.file}"

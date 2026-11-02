@@ -1,0 +1,21 @@
+name = "e2e_E32_mongo_users"
+
+[[sources]]
+id = "files"
+type = "local"
+mode = "full_refresh"
+path = "${lab}/downloads/json-items/users"
+filter = "*.json"
+
+[[transforms]]
+type = "extract"
+strategy = "fast"
+entities = false
+
+[[sinks]]
+id = "out"
+type = "mongodb"
+write_mode = "append"
+collection = "e2e_users"
+uri = "mongodb://127.0.0.1:27017"
+database = "openetl"

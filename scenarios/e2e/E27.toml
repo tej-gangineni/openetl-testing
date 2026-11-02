@@ -1,0 +1,18 @@
+name = "e2e_E27_pg_http"
+
+[[sources]]
+id = "page"
+type = "http"
+url = "http://127.0.0.1:8765/pages/Secure_Shell.html"
+
+[[transforms]]
+type = "extract"
+strategy = "fast"
+entities = false
+
+[[sinks]]
+id = "out"
+type = "postgres"
+write_mode = "append"
+table = "e2e_http_page"
+dsn = "postgresql://lab:lab@127.0.0.1:5433/openetl"

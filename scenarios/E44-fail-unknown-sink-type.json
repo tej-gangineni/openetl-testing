@@ -1,0 +1,92 @@
+{
+  "id": "E44-fail-unknown-sink-type",
+  "title": "Failure: an unknown sink type is rejected",
+  "tracker_row": "api-E44",
+  "summary": "Submits a job whose sink type does not exist. It must be rejected with an error that names the unknown type, and must never produce a COMPLETED run.",
+  "flow": {
+    "source": {
+      "kind": "files",
+      "label": "10 user .json files",
+      "detail": "${lab}/downloads/json-items/users"
+    },
+    "engine": {
+      "label": "POST /api/v1/jobs (sink e2e_nosuchsink)"
+    },
+    "target": {
+      "kind": "http",
+      "label": "task result",
+      "detail": "status failed"
+    }
+  },
+  "tags": [
+    "api",
+    "failure"
+  ],
+  "resources": [
+    "openetl:api"
+  ],
+  "steps": [
+    {
+      "id": "runSubmit",
+      "phase": "trigger",
+      "title": "Submit the job through the API",
+      "explain": "POST /api/v1/jobs with the TOML base64-encoded, exactly as the console does.",
+      "action": "openetl.api.submitJob",
+      "args": {
+        "specFile": "scenarios/e2e/E44.toml",
+        "name": "e2e_E44_unknown_sink"
+      },
+      "save": "runSub"
+    },
+    {
+      "id": "runWait",
+      "phase": "observe",
+      "title": "Wait for the run to finish",
+      "explain": "Polls the task result and GET /api/v1/runs until this run reaches a terminal status.",
+      "action": "openetl.api.waitRun",
+      "args": {
+        "name": "e2e_E44_unknown_sink",
+        "after": "${runSub.submittedAt}",
+        "taskId": "${runSub.taskId}",
+        "timeoutSec": 120
+      },
+      "save": "run"
+    },
+    {
+      "id": "status",
+      "phase": "observe",
+      "title": "Task is FAILED",
+      "explain": "A job with no valid sink cannot run.",
+      "action": "check.compare",
+      "args": {
+        "left": "${run.status}",
+        "op": "eq",
+        "right": "FAILED"
+      }
+    },
+    {
+      "id": "err",
+      "phase": "observe",
+      "title": "Error names the unknown type",
+      "explain": "The user must be told which type is wrong.",
+      "action": "check.compare",
+      "args": {
+        "left": "${run.error}",
+        "op": "contains",
+        "right": "e2e_nosuchsink"
+      }
+    },
+    {
+      "id": "noRun",
+      "phase": "observe",
+      "title": "No completed run exists for it",
+      "explain": "Nothing ran.",
+      "action": "check.compare",
+      "args": {
+        "left": "${run.hasRunRecord}",
+        "op": "eq",
+        "right": false
+      }
+    }
+  ]
+}

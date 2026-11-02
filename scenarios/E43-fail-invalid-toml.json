@@ -1,0 +1,92 @@
+{
+  "id": "E43-fail-invalid-toml",
+  "title": "Failure: an invalid TOML spec is rejected",
+  "tracker_row": "api-E43",
+  "summary": "Submits a job whose TOML does not parse. It must be rejected: either refused at submit or failed by the worker with a parse error that points at the bad line, and it must never produce a COMPLETED run.",
+  "flow": {
+    "source": {
+      "kind": "files",
+      "label": "broken TOML",
+      "detail": "scenarios/e2e/E43.toml"
+    },
+    "engine": {
+      "label": "POST /api/v1/jobs"
+    },
+    "target": {
+      "kind": "http",
+      "label": "task result",
+      "detail": "status failed"
+    }
+  },
+  "tags": [
+    "api",
+    "failure"
+  ],
+  "resources": [
+    "openetl:api"
+  ],
+  "steps": [
+    {
+      "id": "runSubmit",
+      "phase": "trigger",
+      "title": "Submit the broken TOML",
+      "explain": "The API is what a console or script would call.",
+      "action": "openetl.api.submitJob",
+      "args": {
+        "specFile": "scenarios/e2e/E43.toml",
+        "name": "e2e_E43_invalid_toml"
+      },
+      "save": "runSub"
+    },
+    {
+      "id": "runWait",
+      "phase": "observe",
+      "title": "Wait for the task to finish",
+      "explain": "The worker parses the TOML; the task result records the outcome.",
+      "action": "openetl.api.waitRun",
+      "args": {
+        "name": "e2e_E43_invalid_toml",
+        "after": "${runSub.submittedAt}",
+        "taskId": "${runSub.taskId}",
+        "timeoutSec": 120
+      },
+      "save": "run"
+    },
+    {
+      "id": "status",
+      "phase": "observe",
+      "title": "Task is FAILED",
+      "explain": "A spec that does not parse cannot run.",
+      "action": "check.compare",
+      "args": {
+        "left": "${run.status}",
+        "op": "eq",
+        "right": "FAILED"
+      }
+    },
+    {
+      "id": "err",
+      "phase": "observe",
+      "title": "Error points at the bad line",
+      "explain": "The user must be told where the spec is broken.",
+      "action": "check.compare",
+      "args": {
+        "left": "${run.error}",
+        "op": "contains",
+        "right": "line 3"
+      }
+    },
+    {
+      "id": "noRun",
+      "phase": "observe",
+      "title": "No run record was written for it",
+      "explain": "Nothing ran, so history must not show a completed run.",
+      "action": "check.compare",
+      "args": {
+        "left": "${run.hasRunRecord}",
+        "op": "eq",
+        "right": false
+      }
+    }
+  ]
+}

@@ -1,0 +1,126 @@
+{
+  "id": "E04-api-fleet-metrics",
+  "title": "API: /fleet/metrics and /stream/workers have the documented shape",
+  "tracker_row": "api-E04",
+  "summary": "Reads GET /api/v1/fleet/metrics (24 hour traffic) and GET /api/v1/stream/workers and checks the fields the console dashboards read.",
+  "flow": {
+    "source": {
+      "kind": "http",
+      "label": "OpenETL master",
+      "detail": "http://127.0.0.1:8080"
+    },
+    "engine": {
+      "label": "GET /api/v1/fleet/metrics"
+    },
+    "target": {
+      "kind": "http",
+      "label": "fleet metrics",
+      "detail": "totals, sources, destinations"
+    }
+  },
+  "tags": [
+    "api",
+    "platform"
+  ],
+  "resources": [
+    "openetl:api"
+  ],
+  "steps": [
+    {
+      "id": "get",
+      "phase": "trigger",
+      "title": "GET /api/v1/fleet/metrics",
+      "explain": "What the whole engine moved in the last 24 hours.",
+      "action": "openetl.api.get",
+      "args": {
+        "path": "/api/v1/fleet/metrics"
+      },
+      "save": "fm"
+    },
+    {
+      "id": "keys",
+      "phase": "verify",
+      "title": "Metrics have window, buckets, sources, destinations and totals",
+      "explain": "The dashboard reads exactly these.",
+      "action": "check.hasKeys",
+      "args": {
+        "object": "${fm.body}",
+        "keys": [
+          "window_s",
+          "bucket_s",
+          "updated",
+          "sources",
+          "destinations",
+          "totals.events_in",
+          "totals.events_out",
+          "totals.bytes_in",
+          "totals.bytes_out",
+          "totals.dropped",
+          "totals.live_sources",
+          "totals.live_destinations"
+        ]
+      }
+    },
+    {
+      "id": "window",
+      "phase": "verify",
+      "title": "The window is 24 hours",
+      "explain": "The endpoint is documented as the last 24 hours (86400 s).",
+      "action": "check.compare",
+      "args": {
+        "left": "${fm.body.window_s}",
+        "op": "eq",
+        "right": 86400
+      }
+    },
+    {
+      "id": "liveSrc",
+      "phase": "verify",
+      "title": "live_sources matches the sources listed as live",
+      "explain": "A total that disagrees with its own list is wrong.",
+      "action": "check.compare",
+      "args": {
+        "left": "${fm.body.totals.live_sources}",
+        "op": "lte",
+        "right": "${fm.body.sources.length}"
+      }
+    },
+    {
+      "id": "workers",
+      "phase": "trigger",
+      "title": "GET /api/v1/stream/workers",
+      "explain": "Stream worker registry used by the fleet page.",
+      "action": "openetl.api.get",
+      "args": {
+        "path": "/api/v1/stream/workers"
+      },
+      "save": "sw"
+    },
+    {
+      "id": "wkeys",
+      "phase": "verify",
+      "title": "Stream workers response has workers and count",
+      "explain": "The fleet page reads these two fields.",
+      "action": "check.hasKeys",
+      "args": {
+        "object": "${sw.body}",
+        "keys": [
+          "workers",
+          "count"
+        ]
+      }
+    },
+    {
+      "id": "wcount",
+      "phase": "verify",
+      "title": "count equals the workers listed",
+      "explain": "The count and the list must agree.",
+      "action": "check.compare",
+      "args": {
+        "left": "${sw.body.count}",
+        "op": "eq",
+        "right": "${sw.body.workers.length}"
+      }
+    }
+  ]
+}

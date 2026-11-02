@@ -1,0 +1,203 @@
+{
+  "id": "E33-mongo-http-page",
+  "title": "MongoDB via API: one http page becomes documents that match the run",
+  "tracker_row": "api-E33",
+  "summary": "Submits http (the lab Domain_Name_System.html page) -> MongoDB collection e2e_http_page through the API and checks documents equal records reported, all come from that URL, and the text mentions DNS.",
+  "flow": {
+    "source": {
+      "kind": "http",
+      "label": "Domain_Name_System.html",
+      "detail": "http://127.0.0.1:8765/pages/Domain_Name_System.html"
+    },
+    "engine": {
+      "label": "POST /api/v1/jobs (http -> mongodb)"
+    },
+    "target": {
+      "kind": "mongodb",
+      "label": "collection e2e_http_page",
+      "detail": "127.0.0.1:27017/openetl"
+    }
+  },
+  "tags": [
+    "api",
+    "lab-db"
+  ],
+  "resources": [
+    "openetl:api",
+    "mongodb:lab"
+  ],
+  "steps": [
+    {
+      "id": "drop",
+      "phase": "prepare",
+      "title": "Drop e2e_http_page",
+      "explain": "Starts clean.",
+      "action": "mongo.dropCollection",
+      "args": {
+        "collection": "e2e_http_page"
+      }
+    },
+    {
+      "id": "runSubmit",
+      "phase": "trigger",
+      "title": "Submit the job through the API",
+      "explain": "POST /api/v1/jobs with the TOML base64-encoded, exactly as the console does.",
+      "action": "openetl.api.submitJob",
+      "args": {
+        "specFile": "scenarios/e2e/E33.toml",
+        "name": "e2e_E33_mongo_http"
+      },
+      "save": "runSub"
+    },
+    {
+      "id": "runWait",
+      "phase": "observe",
+      "title": "Wait for the run to finish",
+      "explain": "Polls the task result and GET /api/v1/runs until this run reaches a terminal status.",
+      "action": "openetl.api.waitRun",
+      "args": {
+        "name": "e2e_E33_mongo_http",
+        "after": "${runSub.submittedAt}",
+        "taskId": "${runSub.taskId}",
+        "timeoutSec": 300
+      },
+      "save": "run"
+    },
+    {
+      "id": "runStatus",
+      "phase": "observe",
+      "title": "Run finished COMPLETED",
+      "explain": "A clean run must report COMPLETED, not PARTIAL or FAILED.",
+      "action": "check.compare",
+      "args": {
+        "left": "${run.status}",
+        "op": "eq",
+        "right": "COMPLETED"
+      }
+    },
+    {
+      "id": "runDeliv",
+      "phase": "observe",
+      "title": "Delivered equals records read",
+      "explain": "Every record the run read must be reported as delivered to the sink.",
+      "action": "check.compare",
+      "args": {
+        "left": "${run.delivered}",
+        "op": "eq",
+        "right": "${run.records}"
+      }
+    },
+    {
+      "id": "runFailed",
+      "phase": "observe",
+      "title": "No record failed",
+      "explain": "records_failed must be 0 on a clean run.",
+      "action": "check.compare",
+      "args": {
+        "left": "${run.failed}",
+        "op": "eq",
+        "right": 0
+      }
+    },
+    {
+      "id": "runRecs",
+      "phase": "observe",
+      "title": "The run read some records",
+      "explain": "A run that reads nothing proves nothing.",
+      "action": "check.compare",
+      "args": {
+        "left": "${run.records}",
+        "op": "gt",
+        "right": 0
+      }
+    },
+    {
+      "id": "count",
+      "phase": "verify",
+      "title": "Count documents in e2e_http_page",
+      "explain": "The real number of documents written.",
+      "action": "mongo.count",
+      "args": {
+        "collection": "e2e_http_page"
+      },
+      "save": "docs"
+    },
+    {
+      "id": "docsEq",
+      "phase": "verify",
+      "title": "Documents equal records reported",
+      "explain": "The collection must hold what the run delivered.",
+      "action": "check.compare",
+      "args": {
+        "left": "${docs}",
+        "op": "eq",
+        "right": "${run.records}"
+      }
+    },
+    {
+      "id": "uri",
+      "phase": "verify",
+      "title": "Count documents whose source_uri is the page URL",
+      "explain": "Provenance must point to the URL read.",
+      "action": "mongo.count",
+      "args": {
+        "collection": "e2e_http_page",
+        "filter": {
+          "source_uri": "http://127.0.0.1:8765/pages/Domain_Name_System.html"
+        }
+      },
+      "save": "uri"
+    },
+    {
+      "id": "uriEq",
+      "phase": "verify",
+      "title": "Every document carries the page URL",
+      "explain": "No document without provenance.",
+      "action": "check.compare",
+      "args": {
+        "left": "${uri}",
+        "op": "eq",
+        "right": "${docs}"
+      }
+    },
+    {
+      "id": "spot",
+      "phase": "verify",
+      "title": "Count documents mentioning DNS",
+      "explain": "Spot-check that the page text arrived.",
+      "action": "mongo.count",
+      "args": {
+        "collection": "e2e_http_page",
+        "filter": {
+          "text": {
+            "$regex": "DNS"
+          }
+        }
+      },
+      "save": "spot"
+    },
+    {
+      "id": "spotGt",
+      "phase": "verify",
+      "title": "Some documents mention DNS",
+      "explain": "The page is about DNS.",
+      "action": "check.compare",
+      "args": {
+        "left": "${spot}",
+        "op": "gt",
+        "right": 0
+      }
+    },
+    {
+      "id": "clean",
+      "phase": "verify",
+      "title": "Drop e2e_http_page",
+      "explain": "Removes the test collection.",
+      "action": "mongo.dropCollection",
+      "args": {
+        "collection": "e2e_http_page"
+      },
+      "always": true
+    }
+  ]
+}

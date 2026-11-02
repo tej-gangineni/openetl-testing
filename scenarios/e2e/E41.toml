@@ -1,0 +1,18 @@
+name = "e2e_E41_missing_folder"
+
+[[sources]]
+id = "files"
+type = "local"
+mode = "full_refresh"
+path = "${lab}/state/e2e/does-not-exist-e41"
+filter = "*"
+
+[[transforms]]
+type = "extract"
+strategy = "fast"
+entities = false
+
+[[sinks]]
+id = "out"
+type = "jsonl"
+path = "${out.file}"

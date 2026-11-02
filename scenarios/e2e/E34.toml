@@ -1,0 +1,24 @@
+name = "e2e_E34_ch_linux"
+
+[[sources]]
+id = "files"
+type = "local"
+mode = "full_refresh"
+path = "${lab}/downloads/logs-parts/Linux"
+filter = "Linux-00000*.log"
+
+[[transforms]]
+type = "extract"
+strategy = "fast"
+entities = false
+
+[[sinks]]
+id = "out"
+type = "clickhouse"
+write_mode = "append"
+table = "e2e_linux_logs"
+host = "127.0.0.1"
+port = 8123
+database = "openetl"
+username = "lab"
+password = "lab"

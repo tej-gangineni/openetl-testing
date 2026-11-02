@@ -1,0 +1,261 @@
+{
+  "id": "E25-relata-manifest-per-sink",
+  "title": "Relata job via API: the run manifest carries per-sink figures",
+  "tracker_row": "api-E25",
+  "summary": "Runs one local source into two sinks (relata-e2e and jsonl-e2e) through the API and checks the run manifest lists both sinks by their TOML id with delivered and failed figures that match what each target really received.",
+  "flow": {
+    "source": {
+      "kind": "files",
+      "label": "2 marked HTML pages",
+      "detail": "${lab}/state/e2e/e25-*"
+    },
+    "engine": {
+      "label": "POST /api/v1/jobs (local -> relata + jsonl)"
+    },
+    "target": {
+      "kind": "relata",
+      "label": "Relata + JSONL file",
+      "detail": "per-sink manifest"
+    }
+  },
+  "tags": [
+    "api",
+    "relata-job"
+  ],
+  "resources": [
+    "openetl:api",
+    "relata:dev"
+  ],
+  "steps": [
+    {
+      "id": "src",
+      "phase": "prepare",
+      "title": "Copy 2 lab pages with a run marker",
+      "explain": "Unique content so Relata stores every chunk.",
+      "action": "fixture.copyMarked",
+      "args": {
+        "from": "${lab}/downloads/web",
+        "files": [
+          "Bluetooth.html",
+          "SIM_card.html"
+        ],
+        "name": "e25"
+      },
+      "save": "src"
+    },
+    {
+      "id": "out",
+      "phase": "prepare",
+      "title": "Create a fresh JSONL output folder",
+      "explain": "The second sink writes here.",
+      "action": "fixture.outDir",
+      "args": {
+        "name": "e25-out"
+      },
+      "save": "out"
+    },
+    {
+      "id": "before",
+      "phase": "prepare",
+      "title": "Count Relata chunks (Before)",
+      "explain": "Relata DocumentChunk row count before the run.",
+      "action": "relata.query",
+      "args": {
+        "sql": "SELECT COUNT(*) AS n FROM DocumentChunk"
+      },
+      "save": "before",
+      "compareKey": "relata-chunks"
+    },
+    {
+      "id": "runSubmit",
+      "phase": "trigger",
+      "title": "Submit the job through the API",
+      "explain": "POST /api/v1/jobs with the TOML base64-encoded, exactly as the console does.",
+      "action": "openetl.api.submitJob",
+      "args": {
+        "specFile": "scenarios/e2e/E25.toml",
+        "name": "e2e_E25_two_sinks"
+      },
+      "save": "runSub"
+    },
+    {
+      "id": "runWait",
+      "phase": "observe",
+      "title": "Wait for the run to finish",
+      "explain": "Polls the task result and GET /api/v1/runs until this run reaches a terminal status.",
+      "action": "openetl.api.waitRun",
+      "args": {
+        "name": "e2e_E25_two_sinks",
+        "after": "${runSub.submittedAt}",
+        "taskId": "${runSub.taskId}",
+        "timeoutSec": 300
+      },
+      "save": "run"
+    },
+    {
+      "id": "status",
+      "phase": "observe",
+      "title": "Run finished COMPLETED",
+      "explain": "Both sinks are healthy.",
+      "action": "check.compare",
+      "args": {
+        "left": "${run.status}",
+        "op": "eq",
+        "right": "COMPLETED"
+      }
+    },
+    {
+      "id": "nSinks",
+      "phase": "observe",
+      "title": "Manifest lists 2 sinks",
+      "explain": "One row per configured sink.",
+      "action": "check.compare",
+      "args": {
+        "left": "${run.sinkCount}",
+        "op": "eq",
+        "right": 2
+      }
+    },
+    {
+      "id": "s0name",
+      "phase": "verify",
+      "title": "First sink row is relata-e2e",
+      "explain": "Rows are labelled with the TOML sink id.",
+      "action": "check.compare",
+      "args": {
+        "left": "${run.sinks.0.sink}",
+        "op": "eq",
+        "right": "relata-e2e"
+      }
+    },
+    {
+      "id": "s0type",
+      "phase": "verify",
+      "title": "First sink row type is RelataSink",
+      "explain": "The row names the sink class.",
+      "action": "check.compare",
+      "args": {
+        "left": "${run.sinks.0.type}",
+        "op": "eq",
+        "right": "RelataSink"
+      }
+    },
+    {
+      "id": "s0deliv",
+      "phase": "verify",
+      "title": "relata-e2e delivered equals records",
+      "explain": "Every record went to Relata.",
+      "action": "check.compare",
+      "args": {
+        "left": "${run.sinks.0.delivered}",
+        "op": "eq",
+        "right": "${run.records}"
+      }
+    },
+    {
+      "id": "s0fail",
+      "phase": "verify",
+      "title": "relata-e2e failed is 0",
+      "explain": "No record failed.",
+      "action": "check.compare",
+      "args": {
+        "left": "${run.sinks.0.failed}",
+        "op": "eq",
+        "right": 0
+      }
+    },
+    {
+      "id": "s1name",
+      "phase": "verify",
+      "title": "Second sink row is jsonl-e2e",
+      "explain": "Rows are labelled with the TOML sink id.",
+      "action": "check.compare",
+      "args": {
+        "left": "${run.sinks.1.sink}",
+        "op": "eq",
+        "right": "jsonl-e2e"
+      }
+    },
+    {
+      "id": "s1deliv",
+      "phase": "verify",
+      "title": "jsonl-e2e reports a delivered figure equal to records",
+      "explain": "A per-sink row without figures cannot show whether that sink got the data.",
+      "action": "check.compare",
+      "args": {
+        "left": "${run.sinks.1.delivered}",
+        "op": "eq",
+        "right": "${run.records}"
+      }
+    },
+    {
+      "id": "after",
+      "phase": "verify",
+      "title": "Count Relata chunks (After)",
+      "explain": "Relata DocumentChunk row count after the run.",
+      "action": "relata.query",
+      "args": {
+        "sql": "SELECT COUNT(*) AS n FROM DocumentChunk"
+      },
+      "save": "after",
+      "compareKey": "relata-chunks"
+    },
+    {
+      "id": "chunkDelta",
+      "phase": "verify",
+      "title": "Relata gained exactly relata-e2e delivered chunks",
+      "explain": "The per-sink figure must match the target.",
+      "action": "check.delta",
+      "args": {
+        "before": "${before.0.n}",
+        "after": "${after.0.n}",
+        "expected": "${run.sinks.0.delivered}"
+      }
+    },
+    {
+      "id": "lines",
+      "phase": "verify",
+      "title": "Read the JSONL file",
+      "explain": "What the second sink really wrote.",
+      "action": "fs.jsonlStats",
+      "args": {
+        "file": "${out.file}"
+      },
+      "save": "jl"
+    },
+    {
+      "id": "linesEq",
+      "phase": "verify",
+      "title": "JSONL lines equal records",
+      "explain": "The jsonl sink must hold every record.",
+      "action": "check.compare",
+      "args": {
+        "left": "${jl.lines}",
+        "op": "eq",
+        "right": "${run.records}"
+      }
+    },
+    {
+      "id": "clean1",
+      "phase": "verify",
+      "title": "Remove the staged files",
+      "explain": "Leaves no test files behind.",
+      "action": "fs.removeE2e",
+      "args": {
+        "path": "${src.dir}"
+      },
+      "always": true
+    },
+    {
+      "id": "clean2",
+      "phase": "verify",
+      "title": "Remove the JSONL output",
+      "explain": "Leaves no test files behind.",
+      "action": "fs.removeE2e",
+      "args": {
+        "path": "${out.dir}"
+      },
+      "always": true
+    }
+  ]
+}

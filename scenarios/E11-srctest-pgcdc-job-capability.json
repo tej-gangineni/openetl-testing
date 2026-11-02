@@ -1,0 +1,95 @@
+{
+  "id": "E11-srctest-pgcdc-job-capability",
+  "title": "Source test: postgres-cdc as a job source is a capability failure",
+  "tracker_row": "api-E11",
+  "summary": "Tests postgres-cdc in the job role. It is a change-stream source with no list(), so a job built from it cannot run; the test must fail at stage capability without contacting the database.",
+  "flow": {
+    "source": {
+      "kind": "postgres",
+      "label": "lab Postgres (CDC)",
+      "detail": "127.0.0.1:5433/openetl"
+    },
+    "engine": {
+      "label": "POST /api/v1/sources/test"
+    },
+    "target": {
+      "kind": "http",
+      "label": "test result",
+      "detail": "stage=capability"
+    }
+  },
+  "tags": [
+    "api",
+    "source-test"
+  ],
+  "resources": [
+    "openetl:api"
+  ],
+  "steps": [
+    {
+      "id": "test",
+      "phase": "trigger",
+      "title": "POST /api/v1/sources/test",
+      "explain": "The real source test the console calls before saving a source.",
+      "action": "openetl.api.sourceTest",
+      "args": {
+        "body": {
+          "type": "postgres-cdc",
+          "role": "job",
+          "config": {
+            "dsn": "postgresql://lab:lab@127.0.0.1:5433/openetl"
+          }
+        }
+      },
+      "save": "t"
+    },
+    {
+      "id": "ok",
+      "phase": "verify",
+      "title": "ok is false",
+      "explain": "A job cannot be built from a stream-only source.",
+      "action": "check.compare",
+      "args": {
+        "left": "${t.ok}",
+        "op": "eq",
+        "right": false
+      }
+    },
+    {
+      "id": "stage",
+      "phase": "verify",
+      "title": "stage is capability",
+      "explain": "The refusal must come from the capability stage, before any probe.",
+      "action": "check.compare",
+      "args": {
+        "left": "${t.stage}",
+        "op": "eq",
+        "right": "capability"
+      }
+    },
+    {
+      "id": "level",
+      "phase": "verify",
+      "title": "level is partial",
+      "explain": "Nothing was contacted, so the result must not claim tested.",
+      "action": "check.compare",
+      "args": {
+        "left": "${t.level}",
+        "op": "eq",
+        "right": "partial"
+      }
+    },
+    {
+      "id": "msg",
+      "phase": "verify",
+      "title": "Message explains list() is missing",
+      "explain": "The user must be told why it cannot run as a job.",
+      "action": "check.compare",
+      "args": {
+        "left": "${t.message}",
+        "op": "contains",
+        "right": "list()"
+      }
+    }
+  ]
+}

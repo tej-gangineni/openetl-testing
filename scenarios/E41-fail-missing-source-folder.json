@@ -1,0 +1,102 @@
+{
+  "id": "E41-fail-missing-source-folder",
+  "title": "Failure: a missing source folder gives a clear error",
+  "tracker_row": "api-E41",
+  "summary": "Submits local -> jsonl whose source folder does not exist. The run must not report a clean COMPLETED with nothing read; it must fail or carry an error that names the missing path.",
+  "flow": {
+    "source": {
+      "kind": "files",
+      "label": "missing folder",
+      "detail": "${lab}/state/e2e/does-not-exist-e41"
+    },
+    "engine": {
+      "label": "POST /api/v1/jobs (local -> jsonl)"
+    },
+    "target": {
+      "kind": "files",
+      "label": "out.jsonl",
+      "detail": "${lab}/state/e2e/e41-*"
+    }
+  },
+  "tags": [
+    "api",
+    "failure"
+  ],
+  "resources": [
+    "openetl:api"
+  ],
+  "steps": [
+    {
+      "id": "out",
+      "phase": "prepare",
+      "title": "Create a fresh output folder",
+      "explain": "Gives the sink a valid place to write so only the source can fail.",
+      "action": "fixture.outDir",
+      "args": {
+        "name": "e41"
+      },
+      "save": "out"
+    },
+    {
+      "id": "runSubmit",
+      "phase": "trigger",
+      "title": "Submit the job through the API",
+      "explain": "POST /api/v1/jobs with the TOML base64-encoded, exactly as the console does.",
+      "action": "openetl.api.submitJob",
+      "args": {
+        "specFile": "scenarios/e2e/E41.toml",
+        "name": "e2e_E41_missing_folder"
+      },
+      "save": "runSub"
+    },
+    {
+      "id": "runWait",
+      "phase": "observe",
+      "title": "Wait for the run to finish",
+      "explain": "Polls the task result and GET /api/v1/runs until this run reaches a terminal status.",
+      "action": "openetl.api.waitRun",
+      "args": {
+        "name": "e2e_E41_missing_folder",
+        "after": "${runSub.submittedAt}",
+        "taskId": "${runSub.taskId}",
+        "timeoutSec": 300
+      },
+      "save": "run"
+    },
+    {
+      "id": "status",
+      "phase": "observe",
+      "title": "Run is not COMPLETED",
+      "explain": "A job whose source does not exist did not do its work.",
+      "action": "check.compare",
+      "args": {
+        "left": "${run.status}",
+        "op": "ne",
+        "right": "COMPLETED"
+      }
+    },
+    {
+      "id": "err",
+      "phase": "observe",
+      "title": "Error names the missing path",
+      "explain": "The user must be told which path is wrong.",
+      "action": "check.compare",
+      "args": {
+        "left": "${run.error}",
+        "op": "contains",
+        "right": "does-not-exist-e41"
+      }
+    },
+    {
+      "id": "clean",
+      "phase": "verify",
+      "title": "Remove the output folder",
+      "explain": "Leaves no test files behind.",
+      "action": "fs.removeE2e",
+      "args": {
+        "path": "${out.dir}"
+      },
+      "always": true
+    }
+  ]
+}

@@ -1,0 +1,185 @@
+{
+  "id": "E36-es-rss-feed",
+  "title": "Elasticsearch via API: the 3-item lab feed becomes documents from 3 items",
+  "tracker_row": "api-E36",
+  "summary": "Submits rss (the 3-item lab feed) -> Elasticsearch index e2e_rss_feed through the API and checks 3 items read, documents equal records reported, and 3 source documents represented.",
+  "flow": {
+    "source": {
+      "kind": "http",
+      "label": "lab feed.xml (3 items)",
+      "detail": "http://127.0.0.1:8765/feed.xml"
+    },
+    "engine": {
+      "label": "POST /api/v1/jobs (rss -> elasticsearch)"
+    },
+    "target": {
+      "kind": "elasticsearch",
+      "label": "index e2e_rss_feed",
+      "detail": "127.0.0.1:9200"
+    }
+  },
+  "tags": [
+    "api",
+    "lab-db"
+  ],
+  "resources": [
+    "openetl:api",
+    "elasticsearch:lab"
+  ],
+  "steps": [
+    {
+      "id": "drop",
+      "phase": "prepare",
+      "title": "Delete index e2e_rss_feed",
+      "explain": "Starts clean.",
+      "action": "es.dropIndex",
+      "args": {
+        "index": "e2e_rss_feed"
+      }
+    },
+    {
+      "id": "runSubmit",
+      "phase": "trigger",
+      "title": "Submit the job through the API",
+      "explain": "POST /api/v1/jobs with the TOML base64-encoded, exactly as the console does.",
+      "action": "openetl.api.submitJob",
+      "args": {
+        "specFile": "scenarios/e2e/E36.toml",
+        "name": "e2e_E36_es_rss"
+      },
+      "save": "runSub"
+    },
+    {
+      "id": "runWait",
+      "phase": "observe",
+      "title": "Wait for the run to finish",
+      "explain": "Polls the task result and GET /api/v1/runs until this run reaches a terminal status.",
+      "action": "openetl.api.waitRun",
+      "args": {
+        "name": "e2e_E36_es_rss",
+        "after": "${runSub.submittedAt}",
+        "taskId": "${runSub.taskId}",
+        "timeoutSec": 300
+      },
+      "save": "run"
+    },
+    {
+      "id": "runStatus",
+      "phase": "observe",
+      "title": "Run finished COMPLETED",
+      "explain": "A clean run must report COMPLETED, not PARTIAL or FAILED.",
+      "action": "check.compare",
+      "args": {
+        "left": "${run.status}",
+        "op": "eq",
+        "right": "COMPLETED"
+      }
+    },
+    {
+      "id": "runDeliv",
+      "phase": "observe",
+      "title": "Delivered equals records read",
+      "explain": "Every record the run read must be reported as delivered to the sink.",
+      "action": "check.compare",
+      "args": {
+        "left": "${run.delivered}",
+        "op": "eq",
+        "right": "${run.records}"
+      }
+    },
+    {
+      "id": "runFailed",
+      "phase": "observe",
+      "title": "No record failed",
+      "explain": "records_failed must be 0 on a clean run.",
+      "action": "check.compare",
+      "args": {
+        "left": "${run.failed}",
+        "op": "eq",
+        "right": 0
+      }
+    },
+    {
+      "id": "runRecs",
+      "phase": "observe",
+      "title": "The run read some records",
+      "explain": "A run that reads nothing proves nothing.",
+      "action": "check.compare",
+      "args": {
+        "left": "${run.records}",
+        "op": "gt",
+        "right": 0
+      }
+    },
+    {
+      "id": "files",
+      "phase": "observe",
+      "title": "Run read the 3 feed items",
+      "explain": "The lab feed has 3 items.",
+      "action": "check.compare",
+      "args": {
+        "left": "${run.files}",
+        "op": "eq",
+        "right": 3
+      }
+    },
+    {
+      "id": "count",
+      "phase": "verify",
+      "title": "Count documents in e2e_rss_feed",
+      "explain": "The real number of documents indexed.",
+      "action": "es.count",
+      "args": {
+        "index": "e2e_rss_feed"
+      },
+      "save": "docs"
+    },
+    {
+      "id": "docsEq",
+      "phase": "verify",
+      "title": "Documents equal records reported",
+      "explain": "The index must hold what the run delivered.",
+      "action": "check.compare",
+      "args": {
+        "left": "${docs}",
+        "op": "eq",
+        "right": "${run.records}"
+      }
+    },
+    {
+      "id": "perItem",
+      "phase": "verify",
+      "title": "Distinct source files in the index",
+      "explain": "One source document per feed item.",
+      "action": "es.distinct",
+      "args": {
+        "index": "e2e_rss_feed",
+        "field": "source_filename.keyword"
+      },
+      "save": "df"
+    },
+    {
+      "id": "perItemEq",
+      "phase": "verify",
+      "title": "Three source documents",
+      "explain": "No item lost.",
+      "action": "check.compare",
+      "args": {
+        "left": "${df.length}",
+        "op": "eq",
+        "right": 3
+      }
+    },
+    {
+      "id": "clean",
+      "phase": "verify",
+      "title": "Delete index e2e_rss_feed",
+      "explain": "Removes the test index.",
+      "action": "es.dropIndex",
+      "args": {
+        "index": "e2e_rss_feed"
+      },
+      "always": true
+    }
+  ]
+}

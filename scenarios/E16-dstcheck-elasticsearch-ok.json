@@ -1,0 +1,95 @@
+{
+  "id": "E16-dstcheck-elasticsearch-ok",
+  "title": "Destination check: lab Elasticsearch passes",
+  "tracker_row": "api-E16",
+  "summary": "Checks an elasticsearch destination at the lab URL. The root endpoint answers, so the check must pass at level tested without creating the index.",
+  "flow": {
+    "source": {
+      "kind": "http",
+      "label": "destination config",
+      "detail": "elasticsearch"
+    },
+    "engine": {
+      "label": "POST /api/v1/destinations/check"
+    },
+    "target": {
+      "kind": "elasticsearch",
+      "label": "lab Elasticsearch",
+      "detail": "127.0.0.1:9200"
+    }
+  },
+  "tags": [
+    "api",
+    "destination-check"
+  ],
+  "resources": [
+    "openetl:api",
+    "elasticsearch:lab"
+  ],
+  "steps": [
+    {
+      "id": "check",
+      "phase": "trigger",
+      "title": "POST /api/v1/destinations/check",
+      "explain": "The real destination check the console calls before saving a destination.",
+      "action": "openetl.api.destinationCheck",
+      "args": {
+        "body": {
+          "type": "elasticsearch",
+          "config": {
+            "url": "http://127.0.0.1:9200",
+            "index": "e2e_dstcheck"
+          }
+        }
+      },
+      "save": "c"
+    },
+    {
+      "id": "ok",
+      "phase": "verify",
+      "title": "ok is true",
+      "explain": "Elasticsearch is up.",
+      "action": "check.compare",
+      "args": {
+        "left": "${c.ok}",
+        "op": "eq",
+        "right": true
+      }
+    },
+    {
+      "id": "level",
+      "phase": "verify",
+      "title": "level is tested",
+      "explain": "It really sent a GET.",
+      "action": "check.compare",
+      "args": {
+        "left": "${c.level}",
+        "op": "eq",
+        "right": "tested"
+      }
+    },
+    {
+      "id": "noIndex",
+      "phase": "verify",
+      "title": "The index was not created",
+      "explain": "A check must never write.",
+      "action": "es.count",
+      "args": {
+        "index": "e2e_dstcheck"
+      },
+      "save": "idx"
+    },
+    {
+      "id": "noIndexEq",
+      "phase": "verify",
+      "title": "Index holds no documents",
+      "explain": "Nothing may be written by a check.",
+      "action": "check.compare",
+      "args": {
+        "left": "${idx}",
+        "op": "eq",
+        "right": 0
+      }
+    }
+  ]
+}

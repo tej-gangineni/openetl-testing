@@ -1,0 +1,225 @@
+{
+  "id": "E32-mongo-local-users",
+  "title": "MongoDB via API: 10 user files become documents that match the source",
+  "tracker_row": "api-E32",
+  "summary": "Submits local (10 user JSON files) -> MongoDB collection e2e_users through the API and checks documents equal records reported, every file is represented, and a known email lands exactly once.",
+  "flow": {
+    "source": {
+      "kind": "files",
+      "label": "10 user .json files",
+      "detail": "${lab}/downloads/json-items/users"
+    },
+    "engine": {
+      "label": "POST /api/v1/jobs (local -> mongodb)"
+    },
+    "target": {
+      "kind": "mongodb",
+      "label": "collection e2e_users",
+      "detail": "127.0.0.1:27017/openetl"
+    }
+  },
+  "tags": [
+    "api",
+    "lab-db"
+  ],
+  "resources": [
+    "openetl:api",
+    "mongodb:lab"
+  ],
+  "steps": [
+    {
+      "id": "drop",
+      "phase": "prepare",
+      "title": "Drop e2e_users",
+      "explain": "Starts clean.",
+      "action": "mongo.dropCollection",
+      "args": {
+        "collection": "e2e_users"
+      }
+    },
+    {
+      "id": "srcFiles",
+      "phase": "prepare",
+      "title": "Count source files",
+      "explain": "One user per file.",
+      "action": "fs.countFiles",
+      "args": {
+        "dir": "${lab}/downloads/json-items/users",
+        "glob": "*.json"
+      },
+      "save": "srcFiles"
+    },
+    {
+      "id": "runSubmit",
+      "phase": "trigger",
+      "title": "Submit the job through the API",
+      "explain": "POST /api/v1/jobs with the TOML base64-encoded, exactly as the console does.",
+      "action": "openetl.api.submitJob",
+      "args": {
+        "specFile": "scenarios/e2e/E32.toml",
+        "name": "e2e_E32_mongo_users"
+      },
+      "save": "runSub"
+    },
+    {
+      "id": "runWait",
+      "phase": "observe",
+      "title": "Wait for the run to finish",
+      "explain": "Polls the task result and GET /api/v1/runs until this run reaches a terminal status.",
+      "action": "openetl.api.waitRun",
+      "args": {
+        "name": "e2e_E32_mongo_users",
+        "after": "${runSub.submittedAt}",
+        "taskId": "${runSub.taskId}",
+        "timeoutSec": 300
+      },
+      "save": "run"
+    },
+    {
+      "id": "runStatus",
+      "phase": "observe",
+      "title": "Run finished COMPLETED",
+      "explain": "A clean run must report COMPLETED, not PARTIAL or FAILED.",
+      "action": "check.compare",
+      "args": {
+        "left": "${run.status}",
+        "op": "eq",
+        "right": "COMPLETED"
+      }
+    },
+    {
+      "id": "runDeliv",
+      "phase": "observe",
+      "title": "Delivered equals records read",
+      "explain": "Every record the run read must be reported as delivered to the sink.",
+      "action": "check.compare",
+      "args": {
+        "left": "${run.delivered}",
+        "op": "eq",
+        "right": "${run.records}"
+      }
+    },
+    {
+      "id": "runFailed",
+      "phase": "observe",
+      "title": "No record failed",
+      "explain": "records_failed must be 0 on a clean run.",
+      "action": "check.compare",
+      "args": {
+        "left": "${run.failed}",
+        "op": "eq",
+        "right": 0
+      }
+    },
+    {
+      "id": "runRecs",
+      "phase": "observe",
+      "title": "The run read some records",
+      "explain": "A run that reads nothing proves nothing.",
+      "action": "check.compare",
+      "args": {
+        "left": "${run.records}",
+        "op": "gt",
+        "right": 0
+      }
+    },
+    {
+      "id": "files",
+      "phase": "observe",
+      "title": "Run read every source file",
+      "explain": "Files read must equal files on disk.",
+      "action": "check.compare",
+      "args": {
+        "left": "${run.files}",
+        "op": "eq",
+        "right": "${srcFiles}"
+      }
+    },
+    {
+      "id": "count",
+      "phase": "verify",
+      "title": "Count documents in e2e_users",
+      "explain": "The real number of documents written.",
+      "action": "mongo.count",
+      "args": {
+        "collection": "e2e_users"
+      },
+      "save": "docs"
+    },
+    {
+      "id": "docsEq",
+      "phase": "verify",
+      "title": "Documents equal records reported",
+      "explain": "The collection must hold what the run delivered.",
+      "action": "check.compare",
+      "args": {
+        "left": "${docs}",
+        "op": "eq",
+        "right": "${run.records}"
+      }
+    },
+    {
+      "id": "perFile",
+      "phase": "verify",
+      "title": "Count distinct source files",
+      "explain": "Every file must be represented.",
+      "action": "mongo.distinct",
+      "args": {
+        "collection": "e2e_users",
+        "field": "source_filename"
+      },
+      "save": "df"
+    },
+    {
+      "id": "perFileEq",
+      "phase": "verify",
+      "title": "Distinct files equal source files",
+      "explain": "No file lost.",
+      "action": "check.compare",
+      "args": {
+        "left": "${df}",
+        "op": "eq",
+        "right": "${srcFiles}"
+      }
+    },
+    {
+      "id": "spot",
+      "phase": "verify",
+      "title": "Find the user Sincere@april.biz",
+      "explain": "Spot-check of real field values.",
+      "action": "mongo.count",
+      "args": {
+        "collection": "e2e_users",
+        "filter": {
+          "text": {
+            "$regex": "Sincere@april\\.biz"
+          }
+        }
+      },
+      "save": "spot"
+    },
+    {
+      "id": "spotEq",
+      "phase": "verify",
+      "title": "Exactly one document holds that email",
+      "explain": "The user is in the source once.",
+      "action": "check.compare",
+      "args": {
+        "left": "${spot}",
+        "op": "eq",
+        "right": 1
+      }
+    },
+    {
+      "id": "clean",
+      "phase": "verify",
+      "title": "Drop e2e_users",
+      "explain": "Removes the test collection.",
+      "action": "mongo.dropCollection",
+      "args": {
+        "collection": "e2e_users"
+      },
+      "always": true
+    }
+  ]
+}

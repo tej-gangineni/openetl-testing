@@ -1,0 +1,94 @@
+{
+  "id": "E15-dstcheck-postgres-no-dsn",
+  "title": "Destination check: Postgres without a DSN is a config error",
+  "tracker_row": "api-E15",
+  "summary": "Checks a postgres destination with a table but no DSN. Nothing can be contacted, so the result must be a config failure at level partial that names the missing DSN.",
+  "flow": {
+    "source": {
+      "kind": "http",
+      "label": "destination config",
+      "detail": "postgres, no dsn"
+    },
+    "engine": {
+      "label": "POST /api/v1/destinations/check"
+    },
+    "target": {
+      "kind": "postgres",
+      "label": "lab Postgres",
+      "detail": "not contacted"
+    }
+  },
+  "tags": [
+    "api",
+    "destination-check"
+  ],
+  "resources": [
+    "openetl:api"
+  ],
+  "steps": [
+    {
+      "id": "check",
+      "phase": "trigger",
+      "title": "POST /api/v1/destinations/check",
+      "explain": "The real destination check the console calls before saving a destination.",
+      "action": "openetl.api.destinationCheck",
+      "args": {
+        "body": {
+          "type": "postgres",
+          "config": {
+            "table": "e2e_dstcheck"
+          }
+        }
+      },
+      "save": "c"
+    },
+    {
+      "id": "ok",
+      "phase": "verify",
+      "title": "ok is false",
+      "explain": "A destination with no DSN cannot be used.",
+      "action": "check.compare",
+      "args": {
+        "left": "${c.ok}",
+        "op": "eq",
+        "right": false
+      }
+    },
+    {
+      "id": "stage",
+      "phase": "verify",
+      "title": "stage is config",
+      "explain": "The failure is in the settings, before any connection.",
+      "action": "check.compare",
+      "args": {
+        "left": "${c.stage}",
+        "op": "eq",
+        "right": "config"
+      }
+    },
+    {
+      "id": "level",
+      "phase": "verify",
+      "title": "level is partial",
+      "explain": "Nothing was contacted.",
+      "action": "check.compare",
+      "args": {
+        "left": "${c.level}",
+        "op": "eq",
+        "right": "partial"
+      }
+    },
+    {
+      "id": "msg",
+      "phase": "verify",
+      "title": "Message names the dsn",
+      "explain": "The user must be told which setting is missing.",
+      "action": "check.compare",
+      "args": {
+        "left": "${c.message}",
+        "op": "contains",
+        "right": "dsn"
+      }
+    }
+  ]
+}

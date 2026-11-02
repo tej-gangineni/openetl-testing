@@ -1,0 +1,107 @@
+{
+  "id": "E01-api-status",
+  "title": "API: /status reports the queue and a live worker",
+  "tracker_row": "api-E01",
+  "summary": "Reads GET /api/v1/status from the running master and checks it reports a queue depth, at least one registered worker, and the fields a console needs for each worker.",
+  "flow": {
+    "source": {
+      "kind": "http",
+      "label": "OpenETL master",
+      "detail": "http://127.0.0.1:8080"
+    },
+    "engine": {
+      "label": "GET /api/v1/status"
+    },
+    "target": {
+      "kind": "http",
+      "label": "status JSON",
+      "detail": "queue_depth, workers, worker_count"
+    }
+  },
+  "tags": [
+    "api",
+    "platform"
+  ],
+  "resources": [
+    "openetl:api"
+  ],
+  "steps": [
+    {
+      "id": "status",
+      "phase": "trigger",
+      "title": "GET /api/v1/status",
+      "explain": "The real status endpoint of the running master.",
+      "action": "openetl.api.get",
+      "args": {
+        "path": "/api/v1/status"
+      },
+      "save": "st"
+    },
+    {
+      "id": "keys",
+      "phase": "verify",
+      "title": "Status has queue_depth, workers and worker_count",
+      "explain": "These three fields are the contract of the status endpoint.",
+      "action": "check.hasKeys",
+      "args": {
+        "object": "${st.body}",
+        "keys": [
+          "queue_depth",
+          "workers",
+          "worker_count"
+        ]
+      }
+    },
+    {
+      "id": "workers",
+      "phase": "verify",
+      "title": "At least one worker is registered",
+      "explain": "Jobs submitted through the API need a worker to run them.",
+      "action": "check.compare",
+      "args": {
+        "left": "${st.body.worker_count}",
+        "op": "gte",
+        "right": 1
+      }
+    },
+    {
+      "id": "countMatches",
+      "phase": "verify",
+      "title": "worker_count equals the workers listed",
+      "explain": "The count and the list must agree.",
+      "action": "check.compare",
+      "args": {
+        "left": "${st.body.worker_count}",
+        "op": "eq",
+        "right": "${st.body.workers.length}"
+      }
+    },
+    {
+      "id": "wkeys",
+      "phase": "verify",
+      "title": "Each worker has id, status and heartbeat time",
+      "explain": "A worker entry without these cannot be shown or monitored.",
+      "action": "check.hasKeys",
+      "args": {
+        "object": "${st.body.workers.0}",
+        "keys": [
+          "worker_id",
+          "status",
+          "ts"
+        ]
+      }
+    },
+    {
+      "id": "depth",
+      "phase": "verify",
+      "title": "queue_depth is a number of zero or more",
+      "explain": "A negative or missing depth would mean the queue cannot be read.",
+      "action": "check.compare",
+      "args": {
+        "left": "${st.body.queue_depth}",
+        "op": "gte",
+        "right": 0
+      }
+    }
+  ]
+}

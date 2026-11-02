@@ -1,0 +1,230 @@
+{
+  "id": "E27-pg-http-page",
+  "title": "Postgres via API: one http page becomes rows that match the run",
+  "tracker_row": "api-E27",
+  "summary": "Submits http (the lab Secure_Shell.html page) -> postgres table e2e_http_page through the API and checks rows equal the records reported, all rows come from one source document with the page URL, and the text mentions SSH.",
+  "flow": {
+    "source": {
+      "kind": "http",
+      "label": "Secure_Shell.html",
+      "detail": "http://127.0.0.1:8765/pages/Secure_Shell.html"
+    },
+    "engine": {
+      "label": "POST /api/v1/jobs (http -> postgres)"
+    },
+    "target": {
+      "kind": "postgres",
+      "label": "table e2e_http_page",
+      "detail": "127.0.0.1:5433/openetl"
+    }
+  },
+  "tags": [
+    "api",
+    "lab-db"
+  ],
+  "resources": [
+    "openetl:api",
+    "postgres:lab"
+  ],
+  "steps": [
+    {
+      "id": "drop",
+      "phase": "prepare",
+      "title": "Drop e2e_http_page",
+      "explain": "Starts clean so every row counted later was written by this run.",
+      "action": "pg.dropTable",
+      "args": {
+        "table": "e2e_http_page"
+      }
+    },
+    {
+      "id": "runSubmit",
+      "phase": "trigger",
+      "title": "Submit the job through the API",
+      "explain": "POST /api/v1/jobs with the TOML base64-encoded, exactly as the console does.",
+      "action": "openetl.api.submitJob",
+      "args": {
+        "specFile": "scenarios/e2e/E27.toml",
+        "name": "e2e_E27_pg_http"
+      },
+      "save": "runSub"
+    },
+    {
+      "id": "runWait",
+      "phase": "observe",
+      "title": "Wait for the run to finish",
+      "explain": "Polls the task result and GET /api/v1/runs until this run reaches a terminal status.",
+      "action": "openetl.api.waitRun",
+      "args": {
+        "name": "e2e_E27_pg_http",
+        "after": "${runSub.submittedAt}",
+        "taskId": "${runSub.taskId}",
+        "timeoutSec": 300
+      },
+      "save": "run"
+    },
+    {
+      "id": "runStatus",
+      "phase": "observe",
+      "title": "Run finished COMPLETED",
+      "explain": "A clean run must report COMPLETED, not PARTIAL or FAILED.",
+      "action": "check.compare",
+      "args": {
+        "left": "${run.status}",
+        "op": "eq",
+        "right": "COMPLETED"
+      }
+    },
+    {
+      "id": "runDeliv",
+      "phase": "observe",
+      "title": "Delivered equals records read",
+      "explain": "Every record the run read must be reported as delivered to the sink.",
+      "action": "check.compare",
+      "args": {
+        "left": "${run.delivered}",
+        "op": "eq",
+        "right": "${run.records}"
+      }
+    },
+    {
+      "id": "runFailed",
+      "phase": "observe",
+      "title": "No record failed",
+      "explain": "records_failed must be 0 on a clean run.",
+      "action": "check.compare",
+      "args": {
+        "left": "${run.failed}",
+        "op": "eq",
+        "right": 0
+      }
+    },
+    {
+      "id": "runRecs",
+      "phase": "observe",
+      "title": "The run read some records",
+      "explain": "A run that reads nothing proves nothing.",
+      "action": "check.compare",
+      "args": {
+        "left": "${run.records}",
+        "op": "gt",
+        "right": 0
+      }
+    },
+    {
+      "id": "files",
+      "phase": "observe",
+      "title": "Run read one page",
+      "explain": "An http source reads one URL.",
+      "action": "check.compare",
+      "args": {
+        "left": "${run.files}",
+        "op": "eq",
+        "right": 1
+      }
+    },
+    {
+      "id": "count",
+      "phase": "verify",
+      "title": "Count rows in e2e_http_page",
+      "explain": "The real number of rows the sink wrote.",
+      "action": "pg.scalar",
+      "args": {
+        "sql": "SELECT count(*) FROM e2e_http_page"
+      },
+      "save": "rows"
+    },
+    {
+      "id": "rowsEq",
+      "phase": "verify",
+      "title": "Rows equal records reported",
+      "explain": "The table must hold what the run delivered.",
+      "action": "check.compare",
+      "args": {
+        "left": "${rows}",
+        "op": "eq",
+        "right": "${run.records}"
+      }
+    },
+    {
+      "id": "docs",
+      "phase": "verify",
+      "title": "Count distinct source documents",
+      "explain": "All rows come from one page.",
+      "action": "pg.scalar",
+      "args": {
+        "sql": "SELECT count(DISTINCT source_sha256) FROM e2e_http_page"
+      },
+      "save": "docs"
+    },
+    {
+      "id": "docsEq",
+      "phase": "verify",
+      "title": "One source document",
+      "explain": "One page in, one document out.",
+      "action": "check.compare",
+      "args": {
+        "left": "${docs}",
+        "op": "eq",
+        "right": 1
+      }
+    },
+    {
+      "id": "uri",
+      "phase": "verify",
+      "title": "Count rows whose source_uri is the page URL",
+      "explain": "Provenance must point back to the URL that was read.",
+      "action": "pg.scalar",
+      "args": {
+        "sql": "SELECT count(*) FROM e2e_http_page WHERE source_uri = 'http://127.0.0.1:8765/pages/Secure_Shell.html'"
+      },
+      "save": "uri"
+    },
+    {
+      "id": "uriEq",
+      "phase": "verify",
+      "title": "Every row carries the page URL",
+      "explain": "No row without provenance.",
+      "action": "check.compare",
+      "args": {
+        "left": "${uri}",
+        "op": "eq",
+        "right": "${rows}"
+      }
+    },
+    {
+      "id": "spot",
+      "phase": "verify",
+      "title": "Count rows mentioning SSH",
+      "explain": "Spot-check that the page text arrived.",
+      "action": "pg.scalar",
+      "args": {
+        "sql": "SELECT count(*) FROM e2e_http_page WHERE text LIKE '%SSH%'"
+      },
+      "save": "spot"
+    },
+    {
+      "id": "spotGt",
+      "phase": "verify",
+      "title": "Some rows mention SSH",
+      "explain": "The page is about SSH.",
+      "action": "check.compare",
+      "args": {
+        "left": "${spot}",
+        "op": "gt",
+        "right": 0
+      }
+    },
+    {
+      "id": "clean",
+      "phase": "verify",
+      "title": "Drop e2e_http_page",
+      "explain": "Removes the test table.",
+      "action": "pg.dropTable",
+      "args": {
+        "table": "e2e_http_page"
+      },
+      "always": true
+    }
+  ]
+}

@@ -1,0 +1,83 @@
+{
+  "id": "E05-srctest-local-ok",
+  "title": "Source test: an existing local folder passes",
+  "tracker_row": "api-E05",
+  "summary": "Asks the engine to test a local source pointing at the lab books folder. The folder exists, so the test must pass with level tested at stage read.",
+  "flow": {
+    "source": {
+      "kind": "files",
+      "label": "lab books folder",
+      "detail": "${lab}/downloads/books"
+    },
+    "engine": {
+      "label": "POST /api/v1/sources/test"
+    },
+    "target": {
+      "kind": "http",
+      "label": "test result",
+      "detail": "ok, stage, level"
+    }
+  },
+  "tags": [
+    "api",
+    "source-test"
+  ],
+  "resources": [
+    "openetl:api"
+  ],
+  "steps": [
+    {
+      "id": "test",
+      "phase": "trigger",
+      "title": "POST /api/v1/sources/test",
+      "explain": "The real source test the console calls before saving a source.",
+      "action": "openetl.api.sourceTest",
+      "args": {
+        "body": {
+          "type": "local",
+          "role": "job",
+          "config": {
+            "path": "${lab}/downloads/books"
+          }
+        }
+      },
+      "save": "t"
+    },
+    {
+      "id": "ok",
+      "phase": "verify",
+      "title": "ok is true",
+      "explain": "The source is reachable and readable, so the test must pass.",
+      "action": "check.compare",
+      "args": {
+        "left": "${t.ok}",
+        "op": "eq",
+        "right": true
+      }
+    },
+    {
+      "id": "level",
+      "phase": "verify",
+      "title": "level is tested",
+      "explain": "A pass must come from a probe that really ran, not just a config check.",
+      "action": "check.compare",
+      "args": {
+        "left": "${t.level}",
+        "op": "eq",
+        "right": "tested"
+      }
+    },
+    {
+      "id": "stage",
+      "phase": "verify",
+      "title": "stage is read",
+      "explain": "The probe listed the folder, which is the read stage.",
+      "action": "check.compare",
+      "args": {
+        "left": "${t.stage}",
+        "op": "eq",
+        "right": "read"
+      }
+    }
+  ]
+}

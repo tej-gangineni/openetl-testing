@@ -1,0 +1,231 @@
+{
+  "id": "E50-run-queue-returns-idle",
+  "title": "Run model: the queue returns to idle after a good and a failed job",
+  "tracker_row": "api-E50",
+  "summary": "Reads the queue depth, runs one good job and one job that fails, and checks after each that the queue depth is back where it started and the worker is idle. A failed task left pending forever would keep the queue from ever draining.",
+  "flow": {
+    "source": {
+      "kind": "files",
+      "label": "10 user .json files",
+      "detail": "${lab}/downloads/json-items/users"
+    },
+    "engine": {
+      "label": "GET /api/v1/status around two submits"
+    },
+    "target": {
+      "kind": "http",
+      "label": "queue depth",
+      "detail": "GET /api/v1/status"
+    }
+  },
+  "tags": [
+    "api",
+    "run-model"
+  ],
+  "resources": [
+    "openetl:api"
+  ],
+  "steps": [
+    {
+      "id": "out",
+      "phase": "prepare",
+      "title": "Create a fresh output folder",
+      "explain": "A clean place for the good job.",
+      "action": "fixture.outDir",
+      "args": {
+        "name": "e50"
+      },
+      "save": "out"
+    },
+    {
+      "id": "d0",
+      "phase": "prepare",
+      "title": "Read the queue depth (Before)",
+      "explain": "The depth the queue must return to.",
+      "action": "openetl.api.get",
+      "args": {
+        "path": "/api/v1/status"
+      },
+      "save": "d0",
+      "compareKey": "queue"
+    },
+    {
+      "id": "goodSubmit",
+      "phase": "trigger",
+      "title": "Submit a good job",
+      "explain": "POST /api/v1/jobs with the TOML base64-encoded, exactly as the console does.",
+      "action": "openetl.api.submitJob",
+      "args": {
+        "specFile": "scenarios/e2e/E50a.toml",
+        "name": "e2e_E50_good"
+      },
+      "save": "goodSub"
+    },
+    {
+      "id": "goodWait",
+      "phase": "observe",
+      "title": "Wait for the good job",
+      "explain": "Polls the task result and GET /api/v1/runs until this run reaches a terminal status.",
+      "action": "openetl.api.waitRun",
+      "args": {
+        "name": "e2e_E50_good",
+        "after": "${goodSub.submittedAt}",
+        "taskId": "${goodSub.taskId}",
+        "timeoutSec": 300
+      },
+      "save": "good"
+    },
+    {
+      "id": "goodStatus",
+      "phase": "observe",
+      "title": "Good job COMPLETED",
+      "explain": "Baseline.",
+      "action": "check.compare",
+      "args": {
+        "left": "${good.status}",
+        "op": "eq",
+        "right": "COMPLETED"
+      }
+    },
+    {
+      "id": "settle1",
+      "phase": "observe",
+      "title": "Give the worker a heartbeat to report",
+      "explain": "The worker refreshes its status every 10 s, so wait one full heartbeat.",
+      "action": "wait.sleep",
+      "args": {
+        "seconds": 12
+      }
+    },
+    {
+      "id": "d1",
+      "phase": "verify",
+      "title": "Read the queue depth after the good job",
+      "explain": "A finished task must leave the queue.",
+      "action": "openetl.api.get",
+      "args": {
+        "path": "/api/v1/status"
+      },
+      "save": "d1"
+    },
+    {
+      "id": "d1Eq",
+      "phase": "verify",
+      "title": "Depth is back to the starting value after the good job",
+      "explain": "Completed tasks are acknowledged.",
+      "action": "check.compare",
+      "args": {
+        "left": "${d1.body.queue_depth}",
+        "op": "eq",
+        "right": "${d0.body.queue_depth}"
+      }
+    },
+    {
+      "id": "idle1",
+      "phase": "verify",
+      "title": "Worker is idle",
+      "explain": "Nothing left to do.",
+      "action": "check.compare",
+      "args": {
+        "left": "${d1.body.workers.0.status}",
+        "op": "eq",
+        "right": "idle"
+      }
+    },
+    {
+      "id": "badSubmit",
+      "phase": "trigger",
+      "title": "Submit a job that fails",
+      "explain": "POST /api/v1/jobs with the TOML base64-encoded, exactly as the console does.",
+      "action": "openetl.api.submitJob",
+      "args": {
+        "specFile": "scenarios/e2e/E50b.toml",
+        "name": "e2e_E50_bad"
+      },
+      "save": "badSub"
+    },
+    {
+      "id": "badWait",
+      "phase": "observe",
+      "title": "Wait for the failing job",
+      "explain": "Polls the task result and GET /api/v1/runs until this run reaches a terminal status.",
+      "action": "openetl.api.waitRun",
+      "args": {
+        "name": "e2e_E50_bad",
+        "after": "${badSub.submittedAt}",
+        "taskId": "${badSub.taskId}",
+        "timeoutSec": 300
+      },
+      "save": "bad"
+    },
+    {
+      "id": "badStatus",
+      "phase": "observe",
+      "title": "Failing job is FAILED",
+      "explain": "The sink type does not exist.",
+      "action": "check.compare",
+      "args": {
+        "left": "${bad.status}",
+        "op": "eq",
+        "right": "FAILED"
+      }
+    },
+    {
+      "id": "settle2",
+      "phase": "observe",
+      "title": "Give the worker a heartbeat to report",
+      "explain": "The worker refreshes its status every 10 s, so wait one full heartbeat.",
+      "action": "wait.sleep",
+      "args": {
+        "seconds": 12
+      }
+    },
+    {
+      "id": "d2",
+      "phase": "verify",
+      "title": "Read the queue depth after the failed job",
+      "explain": "A finished (failed) task must leave the queue too.",
+      "action": "openetl.api.get",
+      "args": {
+        "path": "/api/v1/status"
+      },
+      "save": "d2",
+      "compareKey": "queue"
+    },
+    {
+      "id": "d2Eq",
+      "phase": "verify",
+      "title": "Depth is back to the starting value after the failed job",
+      "explain": "A failed task left pending is never cleared while the worker lives, so the queue never drains.",
+      "action": "check.compare",
+      "args": {
+        "left": "${d2.body.queue_depth}",
+        "op": "eq",
+        "right": "${d0.body.queue_depth}"
+      }
+    },
+    {
+      "id": "idle2",
+      "phase": "verify",
+      "title": "Worker is idle",
+      "explain": "Nothing left to do.",
+      "action": "check.compare",
+      "args": {
+        "left": "${d2.body.workers.0.status}",
+        "op": "eq",
+        "right": "idle"
+      }
+    },
+    {
+      "id": "clean",
+      "phase": "verify",
+      "title": "Remove the output folder",
+      "explain": "Leaves no test files behind.",
+      "action": "fs.removeE2e",
+      "args": {
+        "path": "${out.dir}"
+      },
+      "always": true
+    }
+  ]
+}

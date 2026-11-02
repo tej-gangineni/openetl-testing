@@ -1,0 +1,167 @@
+{
+  "id": "E19-dstcheck-jsonl-path",
+  "title": "Destination check: jsonl refuses a folder and accepts a writable file path",
+  "tracker_row": "api-E19",
+  "summary": "Checks a jsonl destination twice: with a folder (must fail at config, a jsonl sink needs a file) and with a file path in a fresh e2e folder (must pass at level tested). The file must not be created by the check.",
+  "flow": {
+    "source": {
+      "kind": "files",
+      "label": "e2e output folder",
+      "detail": "${lab}/state/e2e"
+    },
+    "engine": {
+      "label": "POST /api/v1/destinations/check"
+    },
+    "target": {
+      "kind": "files",
+      "label": "jsonl destination",
+      "detail": "state/e2e/jsonl-check-*"
+    }
+  },
+  "tags": [
+    "api",
+    "destination-check"
+  ],
+  "resources": [
+    "openetl:api"
+  ],
+  "steps": [
+    {
+      "id": "out",
+      "phase": "prepare",
+      "title": "Create a fresh e2e output folder",
+      "explain": "Gives the check a writable place that no other scenario uses.",
+      "action": "fixture.outDir",
+      "args": {
+        "name": "e19-jsonl-check"
+      },
+      "save": "out"
+    },
+    {
+      "id": "folder",
+      "phase": "trigger",
+      "title": "Check with a folder path",
+      "explain": "The real destination check the console calls before saving a destination.",
+      "action": "openetl.api.destinationCheck",
+      "args": {
+        "body": {
+          "type": "jsonl",
+          "config": {
+            "path": "${out.dir}"
+          }
+        }
+      },
+      "save": "f"
+    },
+    {
+      "id": "fOk",
+      "phase": "verify",
+      "title": "Folder: ok is false",
+      "explain": "A jsonl sink writes one file; a folder is not valid.",
+      "action": "check.compare",
+      "args": {
+        "left": "${f.ok}",
+        "op": "eq",
+        "right": false
+      }
+    },
+    {
+      "id": "fStage",
+      "phase": "verify",
+      "title": "Folder: stage is config",
+      "explain": "It is a settings problem.",
+      "action": "check.compare",
+      "args": {
+        "left": "${f.stage}",
+        "op": "eq",
+        "right": "config"
+      }
+    },
+    {
+      "id": "fMsg",
+      "phase": "verify",
+      "title": "Folder: message asks for a file path",
+      "explain": "The user must be told what to change.",
+      "action": "check.compare",
+      "args": {
+        "left": "${f.message}",
+        "op": "contains",
+        "right": "file path"
+      }
+    },
+    {
+      "id": "file",
+      "phase": "trigger",
+      "title": "Check with a file path",
+      "explain": "The real destination check the console calls before saving a destination.",
+      "action": "openetl.api.destinationCheck",
+      "args": {
+        "body": {
+          "type": "jsonl",
+          "config": {
+            "path": "${out.file}"
+          }
+        }
+      },
+      "save": "g"
+    },
+    {
+      "id": "gOk",
+      "phase": "verify",
+      "title": "File: ok is true",
+      "explain": "The folder is writable.",
+      "action": "check.compare",
+      "args": {
+        "left": "${g.ok}",
+        "op": "eq",
+        "right": true
+      }
+    },
+    {
+      "id": "gLevel",
+      "phase": "verify",
+      "title": "File: level is tested",
+      "explain": "Writability was really probed.",
+      "action": "check.compare",
+      "args": {
+        "left": "${g.level}",
+        "op": "eq",
+        "right": "tested"
+      }
+    },
+    {
+      "id": "noFile",
+      "phase": "verify",
+      "title": "The file was not created",
+      "explain": "A check must not write.",
+      "action": "fs.exists",
+      "args": {
+        "path": "${out.file}"
+      },
+      "save": "made"
+    },
+    {
+      "id": "noFileEq",
+      "phase": "verify",
+      "title": "File does not exist",
+      "explain": "Nothing may be created by a check.",
+      "action": "check.compare",
+      "args": {
+        "left": "${made}",
+        "op": "eq",
+        "right": false
+      }
+    },
+    {
+      "id": "clean",
+      "phase": "verify",
+      "title": "Remove the e2e folder",
+      "explain": "Leaves no test files behind.",
+      "action": "fs.removeE2e",
+      "args": {
+        "path": "${out.dir}"
+      },
+      "always": true
+    }
+  ]
+}

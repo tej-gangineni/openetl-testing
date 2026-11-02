@@ -1,0 +1,238 @@
+{
+  "id": "E46-run-two-jobs-together",
+  "title": "Run model: two jobs submitted together both complete",
+  "tracker_row": "api-E46",
+  "summary": "Submits two different jobs back to back (users -> out.jsonl and 10 todos -> out2.jsonl) before waiting for either, then checks both runs complete with their own run ids and each output file holds exactly its own run's records.",
+  "flow": {
+    "source": {
+      "kind": "files",
+      "label": "users (10) and todos (10)",
+      "detail": "${lab}/downloads/json-items"
+    },
+    "engine": {
+      "label": "POST /api/v1/jobs x2, then wait"
+    },
+    "target": {
+      "kind": "files",
+      "label": "out.jsonl and out2.jsonl",
+      "detail": "${lab}/state/e2e/e46-*"
+    }
+  },
+  "tags": [
+    "api",
+    "run-model"
+  ],
+  "resources": [
+    "openetl:api"
+  ],
+  "steps": [
+    {
+      "id": "out",
+      "phase": "prepare",
+      "title": "Create a fresh output folder",
+      "explain": "Each job writes its own file here.",
+      "action": "fixture.outDir",
+      "args": {
+        "name": "e46"
+      },
+      "save": "out"
+    },
+    {
+      "id": "aSubmit",
+      "phase": "trigger",
+      "title": "Submit job A (users)",
+      "explain": "First of two submissions made before waiting.",
+      "action": "openetl.api.submitJob",
+      "args": {
+        "specFile": "scenarios/e2e/E46a.toml",
+        "name": "e2e_E46_users"
+      },
+      "save": "aSub"
+    },
+    {
+      "id": "bSubmit",
+      "phase": "trigger",
+      "title": "Submit job B (todos)",
+      "explain": "Second submission, while A may still be queued or running.",
+      "action": "openetl.api.submitJob",
+      "args": {
+        "specFile": "scenarios/e2e/E46b.toml",
+        "name": "e2e_E46_todos"
+      },
+      "save": "bSub"
+    },
+    {
+      "id": "aWait",
+      "phase": "observe",
+      "title": "Wait for job A",
+      "explain": "Polls until A is terminal.",
+      "action": "openetl.api.waitRun",
+      "args": {
+        "name": "e2e_E46_users",
+        "after": "${aSub.submittedAt}",
+        "taskId": "${aSub.taskId}"
+      },
+      "save": "a"
+    },
+    {
+      "id": "bWait",
+      "phase": "observe",
+      "title": "Wait for job B",
+      "explain": "Polls until B is terminal.",
+      "action": "openetl.api.waitRun",
+      "args": {
+        "name": "e2e_E46_todos",
+        "after": "${bSub.submittedAt}",
+        "taskId": "${bSub.taskId}"
+      },
+      "save": "b"
+    },
+    {
+      "id": "aStatus",
+      "phase": "observe",
+      "title": "Job A COMPLETED",
+      "explain": "Both jobs must finish clean.",
+      "action": "check.compare",
+      "args": {
+        "left": "${a.status}",
+        "op": "eq",
+        "right": "COMPLETED"
+      }
+    },
+    {
+      "id": "bStatus",
+      "phase": "observe",
+      "title": "Job B COMPLETED",
+      "explain": "Both jobs must finish clean.",
+      "action": "check.compare",
+      "args": {
+        "left": "${b.status}",
+        "op": "eq",
+        "right": "COMPLETED"
+      }
+    },
+    {
+      "id": "ids",
+      "phase": "observe",
+      "title": "The two runs have different ids",
+      "explain": "Two submissions are two runs.",
+      "action": "check.compare",
+      "args": {
+        "left": "${a.run_id}",
+        "op": "ne",
+        "right": "${b.run_id}"
+      }
+    },
+    {
+      "id": "aFiles",
+      "phase": "observe",
+      "title": "Job A read 10 files",
+      "explain": "10 user files.",
+      "action": "check.compare",
+      "args": {
+        "left": "${a.files}",
+        "op": "eq",
+        "right": 10
+      }
+    },
+    {
+      "id": "bFiles",
+      "phase": "observe",
+      "title": "Job B read 10 files",
+      "explain": "10 todo files match todos-0000*.json.",
+      "action": "check.compare",
+      "args": {
+        "left": "${b.files}",
+        "op": "eq",
+        "right": 10
+      }
+    },
+    {
+      "id": "aOut",
+      "phase": "verify",
+      "title": "Read job A output",
+      "explain": "What A really wrote.",
+      "action": "fs.jsonlStats",
+      "args": {
+        "file": "${out.file}",
+        "field": "job_run_id"
+      },
+      "save": "aj"
+    },
+    {
+      "id": "aLines",
+      "phase": "verify",
+      "title": "A lines equal A records",
+      "explain": "No loss and nothing from B.",
+      "action": "check.compare",
+      "args": {
+        "left": "${aj.lines}",
+        "op": "eq",
+        "right": "${a.records}"
+      }
+    },
+    {
+      "id": "aOwn",
+      "phase": "verify",
+      "title": "A lines carry only A run id",
+      "explain": "Outputs must not mix.",
+      "action": "check.compare",
+      "args": {
+        "left": "${aj.distinctValues}",
+        "op": "eq",
+        "right": [
+          "${a.run_id}"
+        ]
+      }
+    },
+    {
+      "id": "bOut",
+      "phase": "verify",
+      "title": "Read job B output",
+      "explain": "What B really wrote.",
+      "action": "fs.jsonlStats",
+      "args": {
+        "file": "${out.file2}",
+        "field": "job_run_id"
+      },
+      "save": "bj"
+    },
+    {
+      "id": "bLines",
+      "phase": "verify",
+      "title": "B lines equal B records",
+      "explain": "No loss and nothing from A.",
+      "action": "check.compare",
+      "args": {
+        "left": "${bj.lines}",
+        "op": "eq",
+        "right": "${b.records}"
+      }
+    },
+    {
+      "id": "bOwn",
+      "phase": "verify",
+      "title": "B lines carry only B run id",
+      "explain": "Outputs must not mix.",
+      "action": "check.compare",
+      "args": {
+        "left": "${bj.distinctValues}",
+        "op": "eq",
+        "right": [
+          "${b.run_id}"
+        ]
+      }
+    },
+    {
+      "id": "clean",
+      "phase": "verify",
+      "title": "Remove the output folder",
+      "explain": "Leaves no test files behind.",
+      "action": "fs.removeE2e",
+      "args": {
+        "path": "${out.dir}"
+      },
+      "always": true
+    }
+  ]
+}

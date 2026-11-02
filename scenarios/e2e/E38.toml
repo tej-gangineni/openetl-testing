@@ -1,0 +1,17 @@
+name = "e2e_E38_relata_bad_token"
+
+[[sources]]
+id = "page"
+type = "http"
+url = "http://127.0.0.1:8765/pages/Packet_switching.html"
+
+[[transforms]]
+type = "extract"
+strategy = "fast"
+entities = false
+
+[[sinks]]
+id = "relata-1"
+type = "relata"
+server_url = "http://localhost:9090"
+token = "e2e-invalid-token-7Q4Z"

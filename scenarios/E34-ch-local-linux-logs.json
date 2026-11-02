@@ -1,0 +1,196 @@
+{
+  "id": "E34-ch-local-linux-logs",
+  "title": "ClickHouse via API: 10 Linux log parts become rows that match the source",
+  "tracker_row": "api-E34",
+  "summary": "Submits local (Linux log parts Linux-000000..9) -> ClickHouse table e2e_linux_logs through the API and checks rows equal records reported, every file is represented, and kernel lines arrived.",
+  "flow": {
+    "source": {
+      "kind": "files",
+      "label": "10 Linux log parts",
+      "detail": "${lab}/downloads/logs-parts/Linux/Linux-00000*.log"
+    },
+    "engine": {
+      "label": "POST /api/v1/jobs (local -> clickhouse)"
+    },
+    "target": {
+      "kind": "clickhouse",
+      "label": "table e2e_linux_logs",
+      "detail": "127.0.0.1:8123/openetl"
+    }
+  },
+  "tags": [
+    "api",
+    "lab-db"
+  ],
+  "resources": [
+    "openetl:api",
+    "clickhouse:lab"
+  ],
+  "steps": [
+    {
+      "id": "drop",
+      "phase": "prepare",
+      "title": "Drop e2e_linux_logs",
+      "explain": "Starts clean.",
+      "action": "ch.dropTable",
+      "args": {
+        "table": "e2e_linux_logs"
+      }
+    },
+    {
+      "id": "srcFiles",
+      "phase": "prepare",
+      "title": "Count matching source files",
+      "explain": "The filter should select these files only.",
+      "action": "fs.countFiles",
+      "args": {
+        "dir": "${lab}/downloads/logs-parts/Linux",
+        "glob": "Linux-00000*.log"
+      },
+      "save": "srcFiles"
+    },
+    {
+      "id": "runSubmit",
+      "phase": "trigger",
+      "title": "Submit the job through the API",
+      "explain": "POST /api/v1/jobs with the TOML base64-encoded, exactly as the console does.",
+      "action": "openetl.api.submitJob",
+      "args": {
+        "specFile": "scenarios/e2e/E34.toml",
+        "name": "e2e_E34_ch_linux"
+      },
+      "save": "runSub"
+    },
+    {
+      "id": "runWait",
+      "phase": "observe",
+      "title": "Wait for the run to finish",
+      "explain": "Polls the task result and GET /api/v1/runs until this run reaches a terminal status.",
+      "action": "openetl.api.waitRun",
+      "args": {
+        "name": "e2e_E34_ch_linux",
+        "after": "${runSub.submittedAt}",
+        "taskId": "${runSub.taskId}",
+        "timeoutSec": 300
+      },
+      "save": "run"
+    },
+    {
+      "id": "runStatus",
+      "phase": "observe",
+      "title": "Run finished COMPLETED",
+      "explain": "A clean run must report COMPLETED, not PARTIAL or FAILED.",
+      "action": "check.compare",
+      "args": {
+        "left": "${run.status}",
+        "op": "eq",
+        "right": "COMPLETED"
+      }
+    },
+    {
+      "id": "runDeliv",
+      "phase": "observe",
+      "title": "Delivered equals records read",
+      "explain": "Every record the run read must be reported as delivered to the sink.",
+      "action": "check.compare",
+      "args": {
+        "left": "${run.delivered}",
+        "op": "eq",
+        "right": "${run.records}"
+      }
+    },
+    {
+      "id": "runFailed",
+      "phase": "observe",
+      "title": "No record failed",
+      "explain": "records_failed must be 0 on a clean run.",
+      "action": "check.compare",
+      "args": {
+        "left": "${run.failed}",
+        "op": "eq",
+        "right": 0
+      }
+    },
+    {
+      "id": "runRecs",
+      "phase": "observe",
+      "title": "The run read some records",
+      "explain": "A run that reads nothing proves nothing.",
+      "action": "check.compare",
+      "args": {
+        "left": "${run.records}",
+        "op": "gt",
+        "right": 0
+      }
+    },
+    {
+      "id": "files",
+      "phase": "observe",
+      "title": "Run read exactly the matching files",
+      "explain": "Files read must equal matching files.",
+      "action": "check.compare",
+      "args": {
+        "left": "${run.files}",
+        "op": "eq",
+        "right": "${srcFiles}"
+      }
+    },
+    {
+      "id": "count",
+      "phase": "verify",
+      "title": "Count rows in e2e_linux_logs",
+      "explain": "The real number of rows written.",
+      "action": "ch.scalar",
+      "args": {
+        "sql": "SELECT count() FROM e2e_linux_logs"
+      },
+      "save": "rows"
+    },
+    {
+      "id": "rowsEq",
+      "phase": "verify",
+      "title": "Rows equal records reported",
+      "explain": "The table must hold what the run delivered.",
+      "action": "check.compare",
+      "args": {
+        "left": "${rows}",
+        "op": "eq",
+        "right": "${run.records}"
+      }
+    },
+    {
+      "id": "perFile",
+      "phase": "verify",
+      "title": "Count distinct source files",
+      "explain": "Every file must be represented.",
+      "action": "ch.scalar",
+      "args": {
+        "sql": "SELECT uniqExact(source_filename) FROM e2e_linux_logs"
+      },
+      "save": "df"
+    },
+    {
+      "id": "perFileEq",
+      "phase": "verify",
+      "title": "Distinct files equal matching files",
+      "explain": "No file lost.",
+      "action": "check.compare",
+      "args": {
+        "left": "${df}",
+        "op": "eq",
+        "right": "${srcFiles}"
+      }
+    },
+    {
+      "id": "clean",
+      "phase": "verify",
+      "title": "Drop e2e_linux_logs",
+      "explain": "Removes the test table.",
+      "action": "ch.dropTable",
+      "args": {
+        "table": "e2e_linux_logs"
+      },
+      "always": true
+    }
+  ]
+}

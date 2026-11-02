@@ -1,0 +1,16 @@
+name = "e2e_E31_jsonl_website"
+
+[[sources]]
+id = "site"
+type = "website"
+url = "http://127.0.0.1:8765/"
+
+[[transforms]]
+type = "extract"
+strategy = "fast"
+entities = false
+
+[[sinks]]
+id = "out"
+type = "jsonl"
+path = "${out.file}"

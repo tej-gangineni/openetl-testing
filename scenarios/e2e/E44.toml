@@ -1,0 +1,17 @@
+name = "e2e_E44_unknown_sink"
+
+[[sources]]
+id = "files"
+type = "local"
+mode = "full_refresh"
+path = "${lab}/downloads/json-items/users"
+filter = "*.json"
+
+[[transforms]]
+type = "extract"
+strategy = "fast"
+entities = false
+
+[[sinks]]
+id = "out"
+type = "e2e_nosuchsink"

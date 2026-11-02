@@ -1,0 +1,18 @@
+name = "e2e_E36_es_rss"
+
+[[sources]]
+id = "feed"
+type = "rss"
+url = "http://127.0.0.1:8765/feed.xml"
+
+[[transforms]]
+type = "extract"
+strategy = "fast"
+entities = false
+
+[[sinks]]
+id = "out"
+type = "elasticsearch"
+write_mode = "append"
+index = "e2e_rss_feed"
+url = "http://127.0.0.1:9200"

@@ -1,0 +1,140 @@
+{
+  "id": "E03-api-runs-shape",
+  "title": "API: /runs returns run records with manifest figures and honours limit",
+  "tracker_row": "api-E03",
+  "summary": "Reads GET /api/v1/runs with limit=3 and limit=1 and checks the shape of a run record (id, job name, status, timestamps, manifest with files, records, delivered, failed and per-sink rows) and that limit is honoured.",
+  "flow": {
+    "source": {
+      "kind": "http",
+      "label": "OpenETL master",
+      "detail": "http://127.0.0.1:8080"
+    },
+    "engine": {
+      "label": "GET /api/v1/runs"
+    },
+    "target": {
+      "kind": "http",
+      "label": "run history",
+      "detail": "runs[]"
+    }
+  },
+  "tags": [
+    "api",
+    "platform"
+  ],
+  "resources": [
+    "openetl:api"
+  ],
+  "steps": [
+    {
+      "id": "get3",
+      "phase": "trigger",
+      "title": "GET /api/v1/runs?limit=3",
+      "explain": "Reads the three most recent runs.",
+      "action": "openetl.api.get",
+      "args": {
+        "path": "/api/v1/runs?limit=3"
+      },
+      "save": "r3"
+    },
+    {
+      "id": "lim3",
+      "phase": "verify",
+      "title": "No more than 3 runs returned",
+      "explain": "limit must cap the list.",
+      "action": "check.compare",
+      "args": {
+        "left": "${r3.body.runs.length}",
+        "op": "lte",
+        "right": 3
+      }
+    },
+    {
+      "id": "some",
+      "phase": "verify",
+      "title": "At least one run exists",
+      "explain": "The worker has run jobs, so history must not be empty.",
+      "action": "check.compare",
+      "args": {
+        "left": "${r3.body.runs.length}",
+        "op": "gte",
+        "right": 1
+      }
+    },
+    {
+      "id": "keys",
+      "phase": "verify",
+      "title": "A run record has the documented fields",
+      "explain": "These are what the console and these scenarios read.",
+      "action": "check.hasKeys",
+      "args": {
+        "object": "${r3.body.runs.0}",
+        "keys": [
+          "run_id",
+          "job_name",
+          "status",
+          "started_at",
+          "completed_at",
+          "error",
+          "manifest.total_files",
+          "manifest.total_records",
+          "manifest.records_delivered",
+          "manifest.records_failed",
+          "manifest.sinks"
+        ]
+      }
+    },
+    {
+      "id": "statusKnown",
+      "phase": "verify",
+      "title": "Status is a known value",
+      "explain": "A run status must be one of the states the runner writes.",
+      "action": "check.compare",
+      "args": {
+        "left": [
+          "completed",
+          "partial",
+          "failed",
+          "running"
+        ],
+        "op": "contains",
+        "right": "${r3.body.runs.0.status}"
+      }
+    },
+    {
+      "id": "get1",
+      "phase": "trigger",
+      "title": "GET /api/v1/runs?limit=1",
+      "explain": "limit=1 must return exactly the newest run.",
+      "action": "openetl.api.get",
+      "args": {
+        "path": "/api/v1/runs?limit=1"
+      },
+      "save": "r1"
+    },
+    {
+      "id": "lim1",
+      "phase": "verify",
+      "title": "Exactly 1 run returned",
+      "explain": "limit=1 returns one row.",
+      "action": "check.compare",
+      "args": {
+        "left": "${r1.body.runs.length}",
+        "op": "eq",
+        "right": 1
+      }
+    },
+    {
+      "id": "newest",
+      "phase": "verify",
+      "title": "limit=1 returns the same newest run as limit=3",
+      "explain": "Both reads are ordered newest first.",
+      "action": "check.compare",
+      "args": {
+        "left": "${r1.body.runs.0.run_id}",
+        "op": "eq",
+        "right": "${r3.body.runs.0.run_id}"
+      }
+    }
+  ]
+}

@@ -1,0 +1,107 @@
+{
+  "id": "E13-dstcheck-postgres-ok",
+  "title": "Destination check: lab Postgres with the right DSN passes",
+  "tracker_row": "api-E13",
+  "summary": "Checks a postgres destination with the lab DSN. The engine must log in, run SELECT 1 on a read-only session and report ok at level tested, without creating the named table.",
+  "flow": {
+    "source": {
+      "kind": "http",
+      "label": "destination config",
+      "detail": "postgres, lab DSN"
+    },
+    "engine": {
+      "label": "POST /api/v1/destinations/check"
+    },
+    "target": {
+      "kind": "postgres",
+      "label": "lab Postgres",
+      "detail": "127.0.0.1:5433/openetl"
+    }
+  },
+  "tags": [
+    "api",
+    "destination-check"
+  ],
+  "resources": [
+    "openetl:api",
+    "postgres:lab"
+  ],
+  "steps": [
+    {
+      "id": "check",
+      "phase": "trigger",
+      "title": "POST /api/v1/destinations/check",
+      "explain": "The real destination check the console calls before saving a destination.",
+      "action": "openetl.api.destinationCheck",
+      "args": {
+        "body": {
+          "type": "postgres",
+          "config": {
+            "dsn": "postgresql://lab:lab@127.0.0.1:5433/openetl",
+            "table": "e2e_dstcheck"
+          }
+        }
+      },
+      "save": "c"
+    },
+    {
+      "id": "ok",
+      "phase": "verify",
+      "title": "ok is true",
+      "explain": "The DSN is correct, so the check must pass.",
+      "action": "check.compare",
+      "args": {
+        "left": "${c.ok}",
+        "op": "eq",
+        "right": true
+      }
+    },
+    {
+      "id": "level",
+      "phase": "verify",
+      "title": "level is tested",
+      "explain": "It really logged in.",
+      "action": "check.compare",
+      "args": {
+        "left": "${c.level}",
+        "op": "eq",
+        "right": "tested"
+      }
+    },
+    {
+      "id": "msg",
+      "phase": "verify",
+      "title": "Message says SELECT 1 ran",
+      "explain": "The check states what it proved.",
+      "action": "check.compare",
+      "args": {
+        "left": "${c.message}",
+        "op": "contains",
+        "right": "SELECT 1"
+      }
+    },
+    {
+      "id": "noTable",
+      "phase": "verify",
+      "title": "The named table was not created",
+      "explain": "A check must never write to the destination.",
+      "action": "pg.scalar",
+      "args": {
+        "sql": "SELECT count(*) FROM information_schema.tables WHERE table_name = 'e2e_dstcheck'"
+      },
+      "save": "tbl"
+    },
+    {
+      "id": "noTableEq",
+      "phase": "verify",
+      "title": "Table count is 0",
+      "explain": "Nothing may be created by a check.",
+      "action": "check.compare",
+      "args": {
+        "left": "${tbl}",
+        "op": "eq",
+        "right": 0
+      }
+    }
+  ]
+}

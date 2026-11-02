@@ -1,0 +1,18 @@
+name = "e2e_E46_todos"
+
+[[sources]]
+id = "files"
+type = "local"
+mode = "full_refresh"
+path = "${lab}/downloads/json-items/todos"
+filter = "todos-0000*.json"
+
+[[transforms]]
+type = "extract"
+strategy = "fast"
+entities = false
+
+[[sinks]]
+id = "out"
+type = "jsonl"
+path = "${out.file2}"

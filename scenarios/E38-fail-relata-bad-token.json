@@ -1,0 +1,156 @@
+{
+  "id": "E38-fail-relata-bad-token",
+  "title": "Failure: a Relata sink with an invalid token fails honestly",
+  "tracker_row": "api-E38",
+  "summary": "Submits http -> relata with an invalid token written in the TOML. Relata refuses every write, so the run must not be COMPLETED, records_failed must be above 0, nothing may land in Relata, and the token must not appear anywhere in the run record or task result.",
+  "flow": {
+    "source": {
+      "kind": "http",
+      "label": "Packet_switching.html",
+      "detail": "http://127.0.0.1:8765/pages/Packet_switching.html"
+    },
+    "engine": {
+      "label": "POST /api/v1/jobs (http -> relata, bad token)"
+    },
+    "target": {
+      "kind": "relata",
+      "label": "Relata (refuses)",
+      "detail": "http://localhost:9090"
+    }
+  },
+  "tags": [
+    "api",
+    "failure"
+  ],
+  "resources": [
+    "openetl:api",
+    "relata:dev"
+  ],
+  "steps": [
+    {
+      "id": "before",
+      "phase": "prepare",
+      "title": "Count Relata chunks (Before)",
+      "explain": "Relata DocumentChunk row count before the run.",
+      "action": "relata.query",
+      "args": {
+        "sql": "SELECT COUNT(*) AS n FROM DocumentChunk"
+      },
+      "save": "before",
+      "compareKey": "relata-chunks"
+    },
+    {
+      "id": "runSubmit",
+      "phase": "trigger",
+      "title": "Submit the job through the API",
+      "explain": "POST /api/v1/jobs with the TOML base64-encoded, exactly as the console does.",
+      "action": "openetl.api.submitJob",
+      "args": {
+        "specFile": "scenarios/e2e/E38.toml",
+        "name": "e2e_E38_relata_bad_token"
+      },
+      "save": "runSub"
+    },
+    {
+      "id": "runWait",
+      "phase": "observe",
+      "title": "Wait for the run to finish",
+      "explain": "Polls the task result and GET /api/v1/runs until this run reaches a terminal status.",
+      "action": "openetl.api.waitRun",
+      "args": {
+        "name": "e2e_E38_relata_bad_token",
+        "after": "${runSub.submittedAt}",
+        "taskId": "${runSub.taskId}",
+        "timeoutSec": 300
+      },
+      "save": "run"
+    },
+    {
+      "id": "status",
+      "phase": "observe",
+      "title": "Run is FAILED or PARTIAL",
+      "explain": "A run where no record landed must not say COMPLETED.",
+      "action": "check.compare",
+      "args": {
+        "left": [
+          "FAILED",
+          "PARTIAL"
+        ],
+        "op": "contains",
+        "right": "${run.status}"
+      }
+    },
+    {
+      "id": "failed",
+      "phase": "observe",
+      "title": "records_failed is above 0",
+      "explain": "The refused records must be counted.",
+      "action": "check.compare",
+      "args": {
+        "left": "${run.failed}",
+        "op": "gt",
+        "right": 0
+      }
+    },
+    {
+      "id": "deliv",
+      "phase": "observe",
+      "title": "records_delivered is 0",
+      "explain": "Nothing was accepted.",
+      "action": "check.compare",
+      "args": {
+        "left": "${run.delivered}",
+        "op": "eq",
+        "right": 0
+      }
+    },
+    {
+      "id": "err",
+      "phase": "observe",
+      "title": "The error names the 401 from Relata",
+      "explain": "The user must see why.",
+      "action": "check.compare",
+      "args": {
+        "left": "${run.error}",
+        "op": "contains",
+        "right": "401"
+      }
+    },
+    {
+      "id": "noTok",
+      "phase": "verify",
+      "title": "The token is absent from the run record and task result",
+      "explain": "A secret written in the TOML must never be stored or returned.",
+      "action": "check.compare",
+      "args": {
+        "left": "${run.raw}",
+        "op": "not_contains",
+        "right": "e2e-invalid-token-7Q4Z"
+      }
+    },
+    {
+      "id": "after",
+      "phase": "verify",
+      "title": "Count Relata chunks (After)",
+      "explain": "Relata DocumentChunk row count after the run.",
+      "action": "relata.query",
+      "args": {
+        "sql": "SELECT COUNT(*) AS n FROM DocumentChunk"
+      },
+      "save": "after",
+      "compareKey": "relata-chunks"
+    },
+    {
+      "id": "chunkDelta",
+      "phase": "verify",
+      "title": "Relata gained no chunks",
+      "explain": "A refused write must store nothing.",
+      "action": "check.delta",
+      "args": {
+        "before": "${before.0.n}",
+        "after": "${after.0.n}",
+        "expected": 0
+      }
+    }
+  ]
+}

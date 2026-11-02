@@ -1,0 +1,83 @@
+{
+  "id": "E07-srctest-http-ok",
+  "title": "Source test: a reachable http page passes",
+  "tracker_row": "api-E07",
+  "summary": "Tests an http source pointing at the lab web server index page. The server answers 200, so the test must pass with level tested.",
+  "flow": {
+    "source": {
+      "kind": "http",
+      "label": "lab web index",
+      "detail": "http://127.0.0.1:8765/index.html"
+    },
+    "engine": {
+      "label": "POST /api/v1/sources/test"
+    },
+    "target": {
+      "kind": "http",
+      "label": "test result",
+      "detail": "ok, stage, level"
+    }
+  },
+  "tags": [
+    "api",
+    "source-test"
+  ],
+  "resources": [
+    "openetl:api"
+  ],
+  "steps": [
+    {
+      "id": "test",
+      "phase": "trigger",
+      "title": "POST /api/v1/sources/test",
+      "explain": "The real source test the console calls before saving a source.",
+      "action": "openetl.api.sourceTest",
+      "args": {
+        "body": {
+          "type": "http",
+          "role": "job",
+          "config": {
+            "url": "http://127.0.0.1:8765/index.html"
+          }
+        }
+      },
+      "save": "t"
+    },
+    {
+      "id": "ok",
+      "phase": "verify",
+      "title": "ok is true",
+      "explain": "The source is reachable and readable, so the test must pass.",
+      "action": "check.compare",
+      "args": {
+        "left": "${t.ok}",
+        "op": "eq",
+        "right": true
+      }
+    },
+    {
+      "id": "level",
+      "phase": "verify",
+      "title": "level is tested",
+      "explain": "A pass must come from a probe that really ran, not just a config check.",
+      "action": "check.compare",
+      "args": {
+        "left": "${t.level}",
+        "op": "eq",
+        "right": "tested"
+      }
+    },
+    {
+      "id": "msg",
+      "phase": "verify",
+      "title": "Message reports HTTP 200",
+      "explain": "The probe saw the real status line.",
+      "action": "check.compare",
+      "args": {
+        "left": "${t.message}",
+        "op": "contains",
+        "right": "HTTP 200"
+      }
+    }
+  ]
+}

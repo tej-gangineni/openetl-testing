@@ -1,0 +1,95 @@
+{
+  "id": "E18-dstcheck-relata-reachable",
+  "title": "Destination check: Relata is reachable",
+  "tracker_row": "api-E18",
+  "summary": "Checks a relata destination at the local Relata URL. The check only opens a connection (a POST would be a write), so it must pass at stage connect, level tested, and say credentials were not checked.",
+  "flow": {
+    "source": {
+      "kind": "http",
+      "label": "destination config",
+      "detail": "relata"
+    },
+    "engine": {
+      "label": "POST /api/v1/destinations/check"
+    },
+    "target": {
+      "kind": "relata",
+      "label": "local Relata",
+      "detail": "http://localhost:9090"
+    }
+  },
+  "tags": [
+    "api",
+    "destination-check"
+  ],
+  "resources": [
+    "openetl:api",
+    "relata:dev"
+  ],
+  "steps": [
+    {
+      "id": "check",
+      "phase": "trigger",
+      "title": "POST /api/v1/destinations/check",
+      "explain": "The real destination check the console calls before saving a destination.",
+      "action": "openetl.api.destinationCheck",
+      "args": {
+        "body": {
+          "type": "relata",
+          "config": {
+            "server_url": "http://localhost:9090"
+          }
+        }
+      },
+      "save": "c"
+    },
+    {
+      "id": "ok",
+      "phase": "verify",
+      "title": "ok is true",
+      "explain": "Relata is listening.",
+      "action": "check.compare",
+      "args": {
+        "left": "${c.ok}",
+        "op": "eq",
+        "right": true
+      }
+    },
+    {
+      "id": "stage",
+      "phase": "verify",
+      "title": "stage is connect",
+      "explain": "Only a connection is attempted.",
+      "action": "check.compare",
+      "args": {
+        "left": "${c.stage}",
+        "op": "eq",
+        "right": "connect"
+      }
+    },
+    {
+      "id": "level",
+      "phase": "verify",
+      "title": "level is tested",
+      "explain": "The connection really happened.",
+      "action": "check.compare",
+      "args": {
+        "left": "${c.level}",
+        "op": "eq",
+        "right": "tested"
+      }
+    },
+    {
+      "id": "msg",
+      "phase": "verify",
+      "title": "Message says credentials were not checked",
+      "explain": "The check must not over-claim.",
+      "action": "check.compare",
+      "args": {
+        "left": "${c.message}",
+        "op": "contains",
+        "right": "credentials were not checked"
+      }
+    }
+  ]
+}

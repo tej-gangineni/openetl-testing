@@ -1,0 +1,18 @@
+name = "e2e_E42_zero_files"
+
+[[sources]]
+id = "files"
+type = "local"
+mode = "full_refresh"
+path = "${lab}/downloads/json-items/users"
+filter = "*.nomatch"
+
+[[transforms]]
+type = "extract"
+strategy = "fast"
+entities = false
+
+[[sinks]]
+id = "out"
+type = "jsonl"
+path = "${out.file}"

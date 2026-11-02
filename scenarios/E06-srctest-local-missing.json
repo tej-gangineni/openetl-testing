@@ -1,0 +1,83 @@
+{
+  "id": "E06-srctest-local-missing",
+  "title": "Source test: a missing local folder fails with a clear message",
+  "tracker_row": "api-E06",
+  "summary": "Tests a local source whose folder does not exist. The test must fail at stage read and the message must say the path does not exist.",
+  "flow": {
+    "source": {
+      "kind": "files",
+      "label": "missing folder",
+      "detail": "${lab}/state/e2e/no-such-folder"
+    },
+    "engine": {
+      "label": "POST /api/v1/sources/test"
+    },
+    "target": {
+      "kind": "http",
+      "label": "test result",
+      "detail": "ok=false"
+    }
+  },
+  "tags": [
+    "api",
+    "source-test"
+  ],
+  "resources": [
+    "openetl:api"
+  ],
+  "steps": [
+    {
+      "id": "test",
+      "phase": "trigger",
+      "title": "POST /api/v1/sources/test",
+      "explain": "The real source test the console calls before saving a source.",
+      "action": "openetl.api.sourceTest",
+      "args": {
+        "body": {
+          "type": "local",
+          "role": "job",
+          "config": {
+            "path": "${lab}/state/e2e/no-such-folder"
+          }
+        }
+      },
+      "save": "t"
+    },
+    {
+      "id": "ok",
+      "phase": "verify",
+      "title": "ok is false",
+      "explain": "A folder that does not exist cannot be read.",
+      "action": "check.compare",
+      "args": {
+        "left": "${t.ok}",
+        "op": "eq",
+        "right": false
+      }
+    },
+    {
+      "id": "stage",
+      "phase": "verify",
+      "title": "stage is read",
+      "explain": "The failure is in reading the path.",
+      "action": "check.compare",
+      "args": {
+        "left": "${t.stage}",
+        "op": "eq",
+        "right": "read"
+      }
+    },
+    {
+      "id": "msg",
+      "phase": "verify",
+      "title": "Message says the path does not exist",
+      "explain": "The user must be told why, in plain words.",
+      "action": "check.compare",
+      "args": {
+        "left": "${t.message}",
+        "op": "contains",
+        "right": "does not exist"
+      }
+    }
+  ]
+}

@@ -1,0 +1,148 @@
+{
+  "id": "E48-run-task-result-endpoint",
+  "title": "Run model: GET /tasks/{id} agrees with the run record",
+  "tracker_row": "api-E48",
+  "summary": "Submits a job, waits for its run, then reads GET /api/v1/tasks/{task_id} and checks it reports completed with the same run id, files and records as the run record. An unknown task id must answer 404.",
+  "flow": {
+    "source": {
+      "kind": "files",
+      "label": "10 user .json files",
+      "detail": "${lab}/downloads/json-items/users"
+    },
+    "engine": {
+      "label": "POST /api/v1/jobs, GET /api/v1/tasks/{id}"
+    },
+    "target": {
+      "kind": "http",
+      "label": "task result",
+      "detail": "status, run_id, totals"
+    }
+  },
+  "tags": [
+    "api",
+    "run-model"
+  ],
+  "resources": [
+    "openetl:api"
+  ],
+  "steps": [
+    {
+      "id": "out",
+      "phase": "prepare",
+      "title": "Create a fresh output folder",
+      "explain": "A clean place for the sink.",
+      "action": "fixture.outDir",
+      "args": {
+        "name": "e48"
+      },
+      "save": "out"
+    },
+    {
+      "id": "runSubmit",
+      "phase": "trigger",
+      "title": "Submit the job through the API",
+      "explain": "POST /api/v1/jobs with the TOML base64-encoded, exactly as the console does.",
+      "action": "openetl.api.submitJob",
+      "args": {
+        "specFile": "scenarios/e2e/E48.toml",
+        "name": "e2e_E48_task_result"
+      },
+      "save": "runSub"
+    },
+    {
+      "id": "runWait",
+      "phase": "observe",
+      "title": "Wait for the run to finish",
+      "explain": "Polls the task result and GET /api/v1/runs until this run reaches a terminal status.",
+      "action": "openetl.api.waitRun",
+      "args": {
+        "name": "e2e_E48_task_result",
+        "after": "${runSub.submittedAt}",
+        "taskId": "${runSub.taskId}",
+        "timeoutSec": 300
+      },
+      "save": "run"
+    },
+    {
+      "id": "task",
+      "phase": "verify",
+      "title": "GET /api/v1/tasks/{task_id}",
+      "explain": "The task result endpoint for this submission.",
+      "action": "openetl.api.get",
+      "args": {
+        "path": "/api/v1/tasks/${runSub.taskId}"
+      },
+      "save": "task"
+    },
+    {
+      "id": "tStatus",
+      "phase": "verify",
+      "title": "Task status is completed",
+      "explain": "The run completed.",
+      "action": "check.compare",
+      "args": {
+        "left": "${task.body.status}",
+        "op": "eq",
+        "right": "completed"
+      }
+    },
+    {
+      "id": "tRun",
+      "phase": "verify",
+      "title": "Task run_id equals the run record id",
+      "explain": "Both endpoints describe the same run.",
+      "action": "check.compare",
+      "args": {
+        "left": "${task.body.run_id}",
+        "op": "eq",
+        "right": "${run.run_id}"
+      }
+    },
+    {
+      "id": "tFiles",
+      "phase": "verify",
+      "title": "Task total_files equals the run record",
+      "explain": "Same figures in both places.",
+      "action": "check.compare",
+      "args": {
+        "left": "${task.body.total_files}",
+        "op": "eq",
+        "right": "${run.files}"
+      }
+    },
+    {
+      "id": "tRecs",
+      "phase": "verify",
+      "title": "Task total_records equals the run record",
+      "explain": "Same figures in both places.",
+      "action": "check.compare",
+      "args": {
+        "left": "${task.body.total_records}",
+        "op": "eq",
+        "right": "${run.records}"
+      }
+    },
+    {
+      "id": "unknown",
+      "phase": "verify",
+      "title": "GET /api/v1/tasks/0-0 answers 404",
+      "explain": "An unknown task must be reported as not found.",
+      "action": "openetl.api.get",
+      "args": {
+        "path": "/api/v1/tasks/0-0",
+        "expectStatus": 404
+      }
+    },
+    {
+      "id": "clean",
+      "phase": "verify",
+      "title": "Remove the output folder",
+      "explain": "Leaves no test files behind.",
+      "action": "fs.removeE2e",
+      "args": {
+        "path": "${out.dir}"
+      },
+      "always": true
+    }
+  ]
+}

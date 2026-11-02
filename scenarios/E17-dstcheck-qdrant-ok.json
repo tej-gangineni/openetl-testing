@@ -1,0 +1,95 @@
+{
+  "id": "E17-dstcheck-qdrant-ok",
+  "title": "Destination check: lab Qdrant passes",
+  "tracker_row": "api-E17",
+  "summary": "Checks a qdrant destination at the lab URL. GET /collections answers, so the check must pass at level tested without creating the collection.",
+  "flow": {
+    "source": {
+      "kind": "http",
+      "label": "destination config",
+      "detail": "qdrant"
+    },
+    "engine": {
+      "label": "POST /api/v1/destinations/check"
+    },
+    "target": {
+      "kind": "qdrant",
+      "label": "lab Qdrant",
+      "detail": "127.0.0.1:6333"
+    }
+  },
+  "tags": [
+    "api",
+    "destination-check"
+  ],
+  "resources": [
+    "openetl:api",
+    "qdrant:lab"
+  ],
+  "steps": [
+    {
+      "id": "check",
+      "phase": "trigger",
+      "title": "POST /api/v1/destinations/check",
+      "explain": "The real destination check the console calls before saving a destination.",
+      "action": "openetl.api.destinationCheck",
+      "args": {
+        "body": {
+          "type": "qdrant",
+          "config": {
+            "url": "http://127.0.0.1:6333",
+            "collection": "e2e_dstcheck"
+          }
+        }
+      },
+      "save": "c"
+    },
+    {
+      "id": "ok",
+      "phase": "verify",
+      "title": "ok is true",
+      "explain": "Qdrant is up.",
+      "action": "check.compare",
+      "args": {
+        "left": "${c.ok}",
+        "op": "eq",
+        "right": true
+      }
+    },
+    {
+      "id": "level",
+      "phase": "verify",
+      "title": "level is tested",
+      "explain": "It really sent a GET.",
+      "action": "check.compare",
+      "args": {
+        "left": "${c.level}",
+        "op": "eq",
+        "right": "tested"
+      }
+    },
+    {
+      "id": "noColl",
+      "phase": "verify",
+      "title": "The collection was not created",
+      "explain": "A check must never write.",
+      "action": "qdrant.collectionInfo",
+      "args": {
+        "collection": "e2e_dstcheck"
+      },
+      "save": "coll"
+    },
+    {
+      "id": "noCollEq",
+      "phase": "verify",
+      "title": "Collection does not exist",
+      "explain": "Nothing may be created by a check.",
+      "action": "check.compare",
+      "args": {
+        "left": "${coll.exists}",
+        "op": "eq",
+        "right": false
+      }
+    }
+  ]
+}

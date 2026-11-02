@@ -1,0 +1,198 @@
+{
+  "id": "E45-run-rerun-idempotent",
+  "title": "Run model: re-running the same job does not duplicate rows",
+  "tracker_row": "api-E45",
+  "summary": "Submits the same local -> postgres job twice through the API. Records what happens: both runs must complete and read the same records, and the table must hold the same number of rows after the second run as after the first (no duplicates).",
+  "flow": {
+    "source": {
+      "kind": "files",
+      "label": "10 user .json files",
+      "detail": "${lab}/downloads/json-items/users"
+    },
+    "engine": {
+      "label": "POST /api/v1/jobs twice (same job)"
+    },
+    "target": {
+      "kind": "postgres",
+      "label": "table e2e_rerun",
+      "detail": "127.0.0.1:5433/openetl"
+    }
+  },
+  "tags": [
+    "api",
+    "run-model"
+  ],
+  "resources": [
+    "openetl:api",
+    "postgres:lab"
+  ],
+  "steps": [
+    {
+      "id": "drop",
+      "phase": "prepare",
+      "title": "Drop e2e_rerun",
+      "explain": "Starts clean so every row counted later was written by this run.",
+      "action": "pg.dropTable",
+      "args": {
+        "table": "e2e_rerun"
+      }
+    },
+    {
+      "id": "firstSubmit",
+      "phase": "trigger",
+      "title": "Submit the first run",
+      "explain": "POST /api/v1/jobs with the TOML base64-encoded, exactly as the console does.",
+      "action": "openetl.api.submitJob",
+      "args": {
+        "specFile": "scenarios/e2e/E45.toml",
+        "name": "e2e_E45_rerun"
+      },
+      "save": "firstSub"
+    },
+    {
+      "id": "firstWait",
+      "phase": "observe",
+      "title": "Wait for the first run",
+      "explain": "Polls the task result and GET /api/v1/runs until this run reaches a terminal status.",
+      "action": "openetl.api.waitRun",
+      "args": {
+        "name": "e2e_E45_rerun",
+        "after": "${firstSub.submittedAt}",
+        "taskId": "${firstSub.taskId}",
+        "timeoutSec": 300
+      },
+      "save": "first"
+    },
+    {
+      "id": "firstStatus",
+      "phase": "observe",
+      "title": "First run COMPLETED",
+      "explain": "Baseline run must be clean.",
+      "action": "check.compare",
+      "args": {
+        "left": "${first.status}",
+        "op": "eq",
+        "right": "COMPLETED"
+      }
+    },
+    {
+      "id": "count1",
+      "phase": "observe",
+      "title": "Count rows after the first run",
+      "explain": "Baseline row count.",
+      "action": "pg.scalar",
+      "args": {
+        "sql": "SELECT count(*) FROM e2e_rerun"
+      },
+      "save": "rows1"
+    },
+    {
+      "id": "secondSubmit",
+      "phase": "trigger",
+      "title": "Submit the same job again",
+      "explain": "POST /api/v1/jobs with the TOML base64-encoded, exactly as the console does.",
+      "action": "openetl.api.submitJob",
+      "args": {
+        "specFile": "scenarios/e2e/E45.toml",
+        "name": "e2e_E45_rerun"
+      },
+      "save": "secondSub"
+    },
+    {
+      "id": "secondWait",
+      "phase": "observe",
+      "title": "Wait for the second run",
+      "explain": "Polls the task result and GET /api/v1/runs until this run reaches a terminal status.",
+      "action": "openetl.api.waitRun",
+      "args": {
+        "name": "e2e_E45_rerun",
+        "after": "${secondSub.submittedAt}",
+        "taskId": "${secondSub.taskId}",
+        "timeoutSec": 300
+      },
+      "save": "second"
+    },
+    {
+      "id": "secondStatus",
+      "phase": "observe",
+      "title": "Second run COMPLETED",
+      "explain": "A rerun must not fail on rows that already exist.",
+      "action": "check.compare",
+      "args": {
+        "left": "${second.status}",
+        "op": "eq",
+        "right": "COMPLETED"
+      }
+    },
+    {
+      "id": "newRun",
+      "phase": "observe",
+      "title": "The second run has its own run id",
+      "explain": "Each submit is a new run.",
+      "action": "check.compare",
+      "args": {
+        "left": "${second.run_id}",
+        "op": "ne",
+        "right": "${first.run_id}"
+      }
+    },
+    {
+      "id": "sameRecs",
+      "phase": "observe",
+      "title": "Both runs read the same records",
+      "explain": "Same input, same work.",
+      "action": "check.compare",
+      "args": {
+        "left": "${second.records}",
+        "op": "eq",
+        "right": "${first.records}"
+      }
+    },
+    {
+      "id": "count2",
+      "phase": "verify",
+      "title": "Count rows after the second run",
+      "explain": "Did the rerun add rows?",
+      "action": "pg.scalar",
+      "args": {
+        "sql": "SELECT count(*) FROM e2e_rerun"
+      },
+      "save": "rows2"
+    },
+    {
+      "id": "noDup",
+      "phase": "verify",
+      "title": "Row count unchanged by the rerun",
+      "explain": "Re-running the same input must not duplicate data.",
+      "action": "check.compare",
+      "args": {
+        "left": "${rows2}",
+        "op": "eq",
+        "right": "${rows1}"
+      }
+    },
+    {
+      "id": "rowsEq",
+      "phase": "verify",
+      "title": "Rows equal records of one run",
+      "explain": "The table holds one copy of the data.",
+      "action": "check.compare",
+      "args": {
+        "left": "${rows2}",
+        "op": "eq",
+        "right": "${first.records}"
+      }
+    },
+    {
+      "id": "clean",
+      "phase": "verify",
+      "title": "Drop e2e_rerun",
+      "explain": "Removes the test table.",
+      "action": "pg.dropTable",
+      "args": {
+        "table": "e2e_rerun"
+      },
+      "always": true
+    }
+  ]
+}

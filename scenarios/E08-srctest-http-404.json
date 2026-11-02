@@ -1,0 +1,83 @@
+{
+  "id": "E08-srctest-http-404",
+  "title": "Source test: an http page that returns 404 fails",
+  "tracker_row": "api-E08",
+  "summary": "Tests an http source pointing at a page that does not exist on the lab web server. The test must fail and report the 404.",
+  "flow": {
+    "source": {
+      "kind": "http",
+      "label": "missing page",
+      "detail": "http://127.0.0.1:8765/no-such-page.html"
+    },
+    "engine": {
+      "label": "POST /api/v1/sources/test"
+    },
+    "target": {
+      "kind": "http",
+      "label": "test result",
+      "detail": "ok=false"
+    }
+  },
+  "tags": [
+    "api",
+    "source-test"
+  ],
+  "resources": [
+    "openetl:api"
+  ],
+  "steps": [
+    {
+      "id": "test",
+      "phase": "trigger",
+      "title": "POST /api/v1/sources/test",
+      "explain": "The real source test the console calls before saving a source.",
+      "action": "openetl.api.sourceTest",
+      "args": {
+        "body": {
+          "type": "http",
+          "role": "job",
+          "config": {
+            "url": "http://127.0.0.1:8765/no-such-page.html"
+          }
+        }
+      },
+      "save": "t"
+    },
+    {
+      "id": "ok",
+      "phase": "verify",
+      "title": "ok is false",
+      "explain": "A 404 page cannot be read.",
+      "action": "check.compare",
+      "args": {
+        "left": "${t.ok}",
+        "op": "eq",
+        "right": false
+      }
+    },
+    {
+      "id": "level",
+      "phase": "verify",
+      "title": "level is tested",
+      "explain": "The probe really contacted the server.",
+      "action": "check.compare",
+      "args": {
+        "left": "${t.level}",
+        "op": "eq",
+        "right": "tested"
+      }
+    },
+    {
+      "id": "msg",
+      "phase": "verify",
+      "title": "Message reports HTTP 404",
+      "explain": "The user must see the real status.",
+      "action": "check.compare",
+      "args": {
+        "left": "${t.message}",
+        "op": "contains",
+        "right": "404"
+      }
+    }
+  ]
+}

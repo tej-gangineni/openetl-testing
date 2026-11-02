@@ -1,0 +1,206 @@
+{
+  "id": "E49-run-failed-then-fixed",
+  "title": "Run model: a fixed run after a failed one reads the data again",
+  "tracker_row": "api-E49",
+  "summary": "Runs the same local -> relata job twice under one job name: first with an invalid token (fails, nothing lands), then with the token fixed. The fixed run must read the same files and records again and deliver all of them; Relata must gain exactly that many chunks.",
+  "flow": {
+    "source": {
+      "kind": "files",
+      "label": "2 marked HTML pages",
+      "detail": "${lab}/state/e2e/e49-*"
+    },
+    "engine": {
+      "label": "POST /api/v1/jobs (bad token, then fixed)"
+    },
+    "target": {
+      "kind": "relata",
+      "label": "Relata DocumentChunk",
+      "detail": "http://localhost:9090"
+    }
+  },
+  "tags": [
+    "api",
+    "run-model"
+  ],
+  "resources": [
+    "openetl:api",
+    "relata:dev"
+  ],
+  "steps": [
+    {
+      "id": "src",
+      "phase": "prepare",
+      "title": "Copy 2 lab pages with a run marker",
+      "explain": "Unique content so Relata stores every chunk.",
+      "action": "fixture.copyMarked",
+      "args": {
+        "from": "${lab}/downloads/web",
+        "files": [
+          "Satellite_internet_constellation.html",
+          "Quality_of_service.html"
+        ],
+        "name": "e49"
+      },
+      "save": "src"
+    },
+    {
+      "id": "before",
+      "phase": "prepare",
+      "title": "Count Relata chunks (Before)",
+      "explain": "Relata DocumentChunk row count before the run.",
+      "action": "relata.query",
+      "args": {
+        "sql": "SELECT COUNT(*) AS n FROM DocumentChunk"
+      },
+      "save": "before",
+      "compareKey": "relata-chunks"
+    },
+    {
+      "id": "badSubmit",
+      "phase": "trigger",
+      "title": "Submit with an invalid token",
+      "explain": "POST /api/v1/jobs with the TOML base64-encoded, exactly as the console does.",
+      "action": "openetl.api.submitJob",
+      "args": {
+        "specFile": "scenarios/e2e/E49a.toml",
+        "name": "e2e_E49_retry"
+      },
+      "save": "badSub"
+    },
+    {
+      "id": "badWait",
+      "phase": "observe",
+      "title": "Wait for the failing run",
+      "explain": "Polls the task result and GET /api/v1/runs until this run reaches a terminal status.",
+      "action": "openetl.api.waitRun",
+      "args": {
+        "name": "e2e_E49_retry",
+        "after": "${badSub.submittedAt}",
+        "taskId": "${badSub.taskId}",
+        "timeoutSec": 300
+      },
+      "save": "bad"
+    },
+    {
+      "id": "badStatus",
+      "phase": "observe",
+      "title": "First run is not COMPLETED",
+      "explain": "The token is wrong, nothing can land.",
+      "action": "check.compare",
+      "args": {
+        "left": "${bad.status}",
+        "op": "ne",
+        "right": "COMPLETED"
+      }
+    },
+    {
+      "id": "goodSubmit",
+      "phase": "trigger",
+      "title": "Submit again with the token fixed",
+      "explain": "POST /api/v1/jobs with the TOML base64-encoded, exactly as the console does.",
+      "action": "openetl.api.submitJob",
+      "args": {
+        "specFile": "scenarios/e2e/E49b.toml",
+        "name": "e2e_E49_retry"
+      },
+      "save": "goodSub"
+    },
+    {
+      "id": "goodWait",
+      "phase": "observe",
+      "title": "Wait for the fixed run",
+      "explain": "Polls the task result and GET /api/v1/runs until this run reaches a terminal status.",
+      "action": "openetl.api.waitRun",
+      "args": {
+        "name": "e2e_E49_retry",
+        "after": "${goodSub.submittedAt}",
+        "taskId": "${goodSub.taskId}",
+        "timeoutSec": 300
+      },
+      "save": "good"
+    },
+    {
+      "id": "goodStatus",
+      "phase": "observe",
+      "title": "Fixed run COMPLETED",
+      "explain": "With a valid token the job must succeed.",
+      "action": "check.compare",
+      "args": {
+        "left": "${good.status}",
+        "op": "eq",
+        "right": "COMPLETED"
+      }
+    },
+    {
+      "id": "sameFiles",
+      "phase": "observe",
+      "title": "Fixed run read the same files again",
+      "explain": "A failed run must not mark its input as done.",
+      "action": "check.compare",
+      "args": {
+        "left": "${good.files}",
+        "op": "eq",
+        "right": "${src.count}"
+      }
+    },
+    {
+      "id": "sameRecs",
+      "phase": "observe",
+      "title": "Fixed run read the same records as the failed one",
+      "explain": "All the data is read again.",
+      "action": "check.compare",
+      "args": {
+        "left": "${good.records}",
+        "op": "eq",
+        "right": "${bad.records}"
+      }
+    },
+    {
+      "id": "allDeliv",
+      "phase": "observe",
+      "title": "Fixed run delivered every record",
+      "explain": "Nothing is skipped on the retry.",
+      "action": "check.compare",
+      "args": {
+        "left": "${good.delivered}",
+        "op": "eq",
+        "right": "${good.records}"
+      }
+    },
+    {
+      "id": "after",
+      "phase": "verify",
+      "title": "Count Relata chunks (After)",
+      "explain": "Relata DocumentChunk row count after the run.",
+      "action": "relata.query",
+      "args": {
+        "sql": "SELECT COUNT(*) AS n FROM DocumentChunk"
+      },
+      "save": "after",
+      "compareKey": "relata-chunks"
+    },
+    {
+      "id": "chunkDelta",
+      "phase": "verify",
+      "title": "Relata gained exactly the fixed run's delivered chunks",
+      "explain": "The failed run stored nothing; the fixed run stored everything.",
+      "action": "check.delta",
+      "args": {
+        "before": "${before.0.n}",
+        "after": "${after.0.n}",
+        "expected": "${good.delivered}"
+      }
+    },
+    {
+      "id": "clean",
+      "phase": "verify",
+      "title": "Remove the staged files",
+      "explain": "Leaves no test files behind.",
+      "action": "fs.removeE2e",
+      "args": {
+        "path": "${src.dir}"
+      },
+      "always": true
+    }
+  ]
+}

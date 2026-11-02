@@ -1,0 +1,16 @@
+name = "e2e_E23_website_relata"
+
+[[sources]]
+id = "site"
+type = "website"
+url = "${web.index}"
+
+[[transforms]]
+type = "extract"
+strategy = "fast"
+entities = false
+
+[[sinks]]
+id = "relata-1"
+type = "relata"
+server_url = "http://localhost:9090"

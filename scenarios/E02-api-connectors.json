@@ -1,0 +1,104 @@
+{
+  "id": "E02-api-connectors",
+  "title": "API: /connectors lists every source and sink type these scenarios use",
+  "tracker_row": "api-E02",
+  "summary": "Reads GET /api/v1/connectors and checks that every source type (local, http, rss, website, postgres-cdc) and sink type (postgres, mongodb, clickhouse, elasticsearch, qdrant, relata, jsonl) used by the E scenarios is in the catalogue the console renders.",
+  "flow": {
+    "source": {
+      "kind": "http",
+      "label": "OpenETL master",
+      "detail": "http://127.0.0.1:8080"
+    },
+    "engine": {
+      "label": "GET /api/v1/connectors"
+    },
+    "target": {
+      "kind": "http",
+      "label": "connector catalogue",
+      "detail": "sources[], sinks[]"
+    }
+  },
+  "tags": [
+    "api",
+    "platform"
+  ],
+  "resources": [
+    "openetl:api"
+  ],
+  "steps": [
+    {
+      "id": "get",
+      "phase": "trigger",
+      "title": "GET /api/v1/connectors",
+      "explain": "The catalogue the console renders its source and destination forms from.",
+      "action": "openetl.api.get",
+      "args": {
+        "path": "/api/v1/connectors"
+      },
+      "save": "cat"
+    },
+    {
+      "id": "srcNames",
+      "phase": "observe",
+      "title": "Collect source ids and schemes",
+      "explain": "A source can be named by its manifest id or any of its schemes.",
+      "action": "data.pluck",
+      "args": {
+        "list": "${cat.body.sources}",
+        "fields": [
+          "id",
+          "schemes"
+        ]
+      },
+      "save": "srcNames"
+    },
+    {
+      "id": "sinkNames",
+      "phase": "observe",
+      "title": "Collect sink ids",
+      "explain": "Sinks are listed by registry name.",
+      "action": "data.pluck",
+      "args": {
+        "list": "${cat.body.sinks}",
+        "field": "id"
+      },
+      "save": "sinkNames"
+    },
+    {
+      "id": "srcMissing",
+      "phase": "verify",
+      "title": "Every source type used here is listed",
+      "explain": "A type a job accepts but the catalogue omits cannot be chosen in the console.",
+      "action": "check.missing",
+      "args": {
+        "expected": [
+          "local",
+          "http",
+          "rss",
+          "website",
+          "postgres-cdc"
+        ],
+        "actual": "${srcNames}"
+      }
+    },
+    {
+      "id": "sinkMissing",
+      "phase": "verify",
+      "title": "Every sink type used here is listed",
+      "explain": "Same rule for destinations.",
+      "action": "check.missing",
+      "args": {
+        "expected": [
+          "postgres",
+          "mongodb",
+          "clickhouse",
+          "elasticsearch",
+          "qdrant",
+          "relata",
+          "jsonl"
+        ],
+        "actual": "${sinkNames}"
+      }
+    }
+  ]
+}
