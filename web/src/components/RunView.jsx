@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { api } from '../api.js';
 import { replay } from '../replay.js';
-import { runReducer, initialRun, counters, touching } from '../reducer.js';
+import { runReducer, initialRun, counters, touching, PHASES, PHASE_NAME, PHASE_HINT, phaseState } from '../reducer.js';
+import { StateIcon } from './ui.jsx';
 import { fmtMs, fmtN, ErrorNote } from './ui.jsx';
 import Flow from './Flow.jsx';
 import Timeline from './Timeline.jsx';
@@ -36,6 +37,32 @@ function Verdict({ run, now, onReplay, canReplay }) {
   );
 }
 
+
+// The four phases as connected nodes. Click one to see just its steps.
+function PhaseChain({ run, selected, onSelect }) {
+  const phases = PHASES.filter((ph) => run.order.some((id) => run.steps[id].phase === ph));
+  return (
+    <div className="pchain" role="tablist" aria-label="Phases of this test">
+      {phases.map((ph, idx) => {
+        const ids = run.order.filter((id) => run.steps[id].phase === ph), ps = phaseState(run, ph);
+        const done = ids.filter((id) => ['pass', 'fail', 'blocked', 'skipped'].includes(run.steps[id].state)).length;
+        return (
+          <React.Fragment key={ph}>
+            {idx > 0 && <span className={`pedge ${ps === 'running' || ps === 'pass' || ps === 'fail' || ps === 'blocked' ? 'on' : ''} ${ps === 'running' ? 'live' : ''}`} aria-hidden="true" />}
+            <button type="button" role="tab" aria-selected={selected === ph} className={`pnode p-${ps} ${selected === ph ? 'sel' : ''}`} style={{ '--i': idx }} onClick={() => onSelect(ph)}>
+              <span className="pn">Step {idx + 1}</span>
+              <span className="ptitle"><span className="pmk" key={ps}><StateIcon state={ps === 'waiting' || ps === 'empty' ? 'waiting' : ps} size={15} /></span>{PHASE_NAME[ph]}</span>
+              <span className="phint">{PHASE_HINT[ph]}</span>
+              <span className="pdots" aria-hidden="true">{ids.map((id) => <i key={id} className={`d-${run.steps[id].state}`} title={run.steps[id].title} />)}</span>
+              <span className="pcount">{done}/{ids.length} steps</span>
+            </button>
+          </React.Fragment>
+        );
+      })}
+    </div>
+  );
+}
+
 export default function RunView({ runId, mode }) {
   const [run, dispatch] = useReducer(runReducer, initialRun);
   const [error, setError] = useState('');
@@ -43,6 +70,7 @@ export default function RunView({ runId, mode }) {
   const events = useRef([]);
   const stop = useRef(() => {});
   const scrolled = useRef(false);
+  const [picked, setPicked] = useState(null);
 
   const feed = useCallback((e) => { dispatch(e); }, []);
   const play = useCallback((evs) => {
@@ -80,12 +108,20 @@ export default function RunView({ runId, mode }) {
   const sc = run.scenario;
   const count = useMemo(() => counters(run), [run]);
   const running = !!sc && !run.verdict;
+  // Follow the live phase; once the run ends, open the first phase that did not pass.
+  const auto = (() => {
+    const phs = PHASES.filter((ph) => run.order.some((id) => run.steps[id].phase === ph));
+    if (!phs.length) return null;
+    return phs.find((ph) => phaseState(run, ph) === 'running') || phs.find((ph) => ['fail', 'blocked'].includes(phaseState(run, ph)))
+      || (run.verdict ? phs[phs.length - 1] : phs.find((ph) => phaseState(run, ph) === 'waiting') || phs[0]);
+  })();
+  const selected = picked || auto;
 
   return (
     <section className="page run-page">
       <nav className="crumbs">
-        <a href="#/">Scenarios</a><span>/</span>
-        {sc ? <a href={`#/history/${encodeURIComponent(sc.id)}`}>History</a> : <span>Run</span>}
+        <a href="#/">Test board</a><span>/</span>
+        {sc ? <a href={`#/scenario/${encodeURIComponent(sc.id)}`}>{sc.title}</a> : <span>Run</span>}
         <span>/</span><code>{runId}</code>
         {mode === 'replay' && <span className="chip">Replay</span>}
       </nav>
@@ -99,7 +135,10 @@ export default function RunView({ runId, mode }) {
         <Verdict run={run} now={now} canReplay={!!run.verdict && events.current.length > 0} onReplay={() => play(events.current)} />
       </header>
       {sc && <Flow flow={sc.flow} touch={running ? touching(run) : null} counts={count} running={running} />}
-      <Timeline run={run} />
+      <h2 className="sech">Step by step</h2>
+      <PhaseChain run={run} selected={selected} onSelect={setPicked} />
+      {picked && <p className="note small">Showing {PHASE_NAME[picked]}. <button type="button" className="link" onClick={() => setPicked(null)}>Follow the run</button></p>}
+      <div className="pbody" key={selected}><Timeline run={run} only={selected} /></div>
     </section>
   );
 }

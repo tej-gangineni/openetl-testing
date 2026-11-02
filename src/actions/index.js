@@ -8,6 +8,10 @@ import { relataQuery } from './relata.js';
 import { dockerStop, dockerStart } from './docker.js';
 import { sleep } from './wait.js';
 import { stage } from './fixture.js';
+import mongo from './mongo.js';
+import qdrant from './qdrant.js';
+import s06 from './s06.js';
+import s10 from './s10.js';
 
 export default {
   'pg.dropTable': dropTable,
@@ -33,4 +37,8 @@ export default {
   'docker.start': dockerStart,
   'wait.sleep': sleep,
   'fixture.stage': stage,
+  ...mongo,
+  ...qdrant,
+  ...s06,
+  ...s10,
 };

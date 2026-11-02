@@ -1,0 +1,283 @@
+{
+  "id": "S10-es-hadoop-log-quality",
+  "title": "Elasticsearch: Hadoop log lines arrive complete and well-formed (data quality)",
+  "tracker_row": "r045, r124",
+  "summary": "Loads 978 Hadoop container log files into the Elasticsearch index hadoop_logs and proves data quality: no empty documents, every line keeps its timestamp, level and message, line counts and level distribution match the source. Conditional routing (r088) is not built in OpenETL, so this checks data quality instead.",
+  "flow": {
+    "source": {
+      "kind": "files",
+      "label": "978 Hadoop container .log files",
+      "detail": "${lab}/downloads/logs/Hadoop"
+    },
+    "engine": {
+      "label": "openetl job run es_hadoop_logs"
+    },
+    "target": {
+      "kind": "elasticsearch",
+      "label": "Elasticsearch index hadoop_logs",
+      "detail": "127.0.0.1:9200"
+    }
+  },
+  "tags": [
+    "lab",
+    "elasticsearch",
+    "data-quality"
+  ],
+  "resources": [
+    "elasticsearch:lab"
+  ],
+  "steps": [
+    {
+      "id": "empty",
+      "phase": "prepare",
+      "title": "Delete the hadoop_logs index",
+      "explain": "Starts clean so every document found later was written by this run.",
+      "action": "es.dropIndex",
+      "args": {
+        "index": "hadoop_logs"
+      }
+    },
+    {
+      "id": "src",
+      "phase": "prepare",
+      "title": "Scan the source Hadoop log files",
+      "explain": "Counts the real log lines, their levels and malformed lines in the 978 source files.",
+      "action": "s10.sourceLogStats",
+      "args": {
+        "dir": "${lab}/downloads/logs/Hadoop"
+      },
+      "save": "srcStats"
+    },
+    {
+      "id": "before",
+      "phase": "prepare",
+      "title": "Count documents in the index (Before)",
+      "explain": "Before the run the index does not exist, so it holds nothing.",
+      "action": "es.count",
+      "args": {
+        "index": "hadoop_logs"
+      },
+      "save": "docsBefore",
+      "compareKey": "hadoop-count"
+    },
+    {
+      "id": "run",
+      "phase": "trigger",
+      "title": "Run the es_hadoop_logs pipeline",
+      "explain": "Runs the real pipeline. Everything below checks what it produced.",
+      "action": "openetl.jobRun",
+      "args": {
+        "pipeline": "${lab}/pipelines/es_hadoop_logs.toml",
+        "cwd": "${lab}",
+        "extras": [
+          "elasticsearch"
+        ],
+        "timeoutSec": 540
+      },
+      "save": "run"
+    },
+    {
+      "id": "status",
+      "phase": "observe",
+      "title": "Job finished with status COMPLETED",
+      "explain": "PARTIAL means some part of the work failed.",
+      "action": "check.compare",
+      "args": {
+        "left": "${run.status}",
+        "op": "eq",
+        "right": "COMPLETED"
+      }
+    },
+    {
+      "id": "warn",
+      "phase": "observe",
+      "title": "Job reported 0 warnings",
+      "explain": "Each warning is a file or step that went wrong.",
+      "action": "check.compare",
+      "args": {
+        "left": "${run.warnings}",
+        "op": "eq",
+        "right": 0
+      }
+    },
+    {
+      "id": "after",
+      "phase": "verify",
+      "title": "Count documents in the index (After)",
+      "explain": "The number of chunk documents Elasticsearch holds (each chunk packs many log lines).",
+      "action": "es.count",
+      "args": {
+        "index": "hadoop_logs"
+      },
+      "save": "docsAfter",
+      "compareKey": "hadoop-count"
+    },
+    {
+      "id": "docs",
+      "phase": "verify",
+      "title": "The index holds documents",
+      "explain": "An empty index would mean nothing was loaded.",
+      "action": "check.compare",
+      "args": {
+        "left": "${docsAfter}",
+        "op": "gt",
+        "right": 0
+      }
+    },
+    {
+      "id": "scan",
+      "phase": "verify",
+      "title": "Scan every indexed document",
+      "explain": "Applies the same line rules to the indexed text as to the source files.",
+      "action": "s10.indexLogStats",
+      "args": {
+        "index": "hadoop_logs"
+      },
+      "save": "idxStats"
+    },
+    {
+      "id": "noEmpty",
+      "phase": "verify",
+      "title": "No empty documents",
+      "explain": "A document without text is useless for search.",
+      "action": "check.compare",
+      "args": {
+        "left": "${idxStats.emptyDocs}",
+        "op": "eq",
+        "right": 0
+      }
+    },
+    {
+      "id": "hasFile",
+      "phase": "verify",
+      "title": "Every document records its source file",
+      "explain": "Without source_filename a log line cannot be traced back.",
+      "action": "check.compare",
+      "args": {
+        "left": "${idxStats.noFile}",
+        "op": "eq",
+        "right": 0
+      }
+    },
+    {
+      "id": "files",
+      "phase": "verify",
+      "title": "Every source file reached the index",
+      "explain": "Each of the source log files must appear as a source_filename.",
+      "action": "check.compare",
+      "args": {
+        "left": "${idxStats.files}",
+        "op": "eq",
+        "right": "${srcStats.files}"
+      }
+    },
+    {
+      "id": "noEntry",
+      "phase": "verify",
+      "title": "Every document holds at least one timestamped log entry",
+      "explain": "A document with no 'date time LEVEL message' line is not a usable log record.",
+      "action": "check.compare",
+      "args": {
+        "left": "${idxStats.noEntryDocs}",
+        "op": "eq",
+        "right": 0
+      }
+    },
+    {
+      "id": "known",
+      "phase": "verify",
+      "title": "Only known log levels appear",
+      "explain": "Levels must come from TRACE DEBUG INFO WARN ERROR FATAL.",
+      "action": "check.compare",
+      "args": {
+        "left": "${idxStats.badLevels}",
+        "op": "eq",
+        "right": 0
+      }
+    },
+    {
+      "id": "info",
+      "phase": "verify",
+      "title": "INFO is the majority level",
+      "explain": "In healthy Hadoop job logs most entries are INFO.",
+      "action": "check.compare",
+      "args": {
+        "left": "${idxStats.infoShare}",
+        "op": "gt",
+        "right": 0.5
+      }
+    },
+    {
+      "id": "err",
+      "phase": "verify",
+      "title": "ERROR and FATAL are under 10 percent",
+      "explain": "A plausible distribution has few errors; a high share would mean misparsed levels.",
+      "action": "check.compare",
+      "args": {
+        "left": "${idxStats.errorShare}",
+        "op": "lt",
+        "right": 0.1
+      }
+    },
+    {
+      "id": "noLoss",
+      "phase": "verify",
+      "title": "No log entry was lost",
+      "explain": "Indexed timestamped entries must be at least the source count.",
+      "action": "check.compare",
+      "args": {
+        "left": "${idxStats.wellFormed}",
+        "op": "gte",
+        "right": "${srcStats.wellFormed}"
+      }
+    },
+    {
+      "id": "frames",
+      "phase": "verify",
+      "title": "Stack-trace frames are all present",
+      "explain": "Every 'at class(file:line)' frame in the source must still be in the index text.",
+      "action": "check.compare",
+      "args": {
+        "left": "${idxStats.frames}",
+        "op": "gte",
+        "right": "${srcStats.frames}"
+      }
+    },
+    {
+      "id": "entries",
+      "phase": "verify",
+      "title": "Entry count equals the source exactly",
+      "explain": "Chunk overlap can repeat entries; equal counts mean nothing is duplicated.",
+      "action": "check.compare",
+      "args": {
+        "left": "${idxStats.wellFormed}",
+        "op": "eq",
+        "right": "${srcStats.wellFormed}"
+      }
+    },
+    {
+      "id": "lines",
+      "phase": "verify",
+      "title": "Line structure is preserved",
+      "explain": "Indexed non-blank line count equals the source; fewer lines means multi-line entries were merged.",
+      "action": "check.compare",
+      "args": {
+        "left": "${idxStats.lines}",
+        "op": "eq",
+        "right": "${srcStats.lines}"
+      }
+    },
+    {
+      "id": "dist",
+      "phase": "verify",
+      "title": "Level distribution equals the source",
+      "explain": "Indexed per-level counts must equal the source counts.",
+      "action": "check.compare",
+      "args": {
+        "left": "${idxStats.levels}",
+        "op": "eq",
+        "right": "${srcStats.levels}"
+      }
+    }
+  ]
+}

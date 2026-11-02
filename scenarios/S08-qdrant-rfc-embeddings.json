@@ -1,0 +1,282 @@
+{
+  "id": "S08-qdrant-rfc-embeddings",
+  "title": "Qdrant: RFC chunks are stored with real embeddings",
+  "tracker_row": "r145, r048",
+  "summary": "Chunks 10 IETF RFC text files and writes them to the Qdrant collection rfcs, then checks the collection shape, point count, payloads and text search. Known defect: the Qdrant sink stores zero-vector placeholders, not embeddings, so the real-embedding check is expected to fail and semantic search is impossible.",
+  "flow": {
+    "source": {
+      "kind": "files",
+      "label": "10 IETF RFC .txt files",
+      "detail": "${lab}/downloads/rfc"
+    },
+    "engine": {
+      "label": "openetl job run qdrant_rfcs"
+    },
+    "target": {
+      "kind": "qdrant",
+      "label": "Qdrant collection rfcs (384, Cosine)",
+      "detail": "127.0.0.1:6333"
+    }
+  },
+  "tags": [
+    "lab",
+    "qdrant",
+    "documents-ai",
+    "known-defect"
+  ],
+  "resources": [
+    "qdrant:lab"
+  ],
+  "steps": [
+    {
+      "id": "empty",
+      "phase": "prepare",
+      "title": "Delete the rfcs collection",
+      "explain": "Starts clean so every point found later was written by this run.",
+      "action": "qdrant.dropCollection",
+      "args": {
+        "collection": "rfcs"
+      }
+    },
+    {
+      "id": "src",
+      "phase": "prepare",
+      "title": "List the source RFC files",
+      "explain": "The documents a correct run must cover.",
+      "action": "fs.list",
+      "args": {
+        "dir": "${lab}/downloads/rfc",
+        "glob": "*.txt"
+      },
+      "save": "srcFiles"
+    },
+    {
+      "id": "before",
+      "phase": "prepare",
+      "title": "Collection info (Before)",
+      "explain": "Before the run the collection does not exist.",
+      "action": "qdrant.collectionInfo",
+      "args": {
+        "collection": "rfcs"
+      },
+      "save": "infoBefore",
+      "compareKey": "rfcs-collection"
+    },
+    {
+      "id": "run",
+      "phase": "trigger",
+      "title": "Run the qdrant_rfcs pipeline",
+      "explain": "Runs the real pipeline. Everything below checks what it produced.",
+      "action": "openetl.jobRun",
+      "args": {
+        "pipeline": "${lab}/pipelines/qdrant_rfcs.toml",
+        "cwd": "${lab}",
+        "extras": [
+          "qdrant"
+        ]
+      },
+      "save": "run"
+    },
+    {
+      "id": "status",
+      "phase": "observe",
+      "title": "Job finished with status COMPLETED",
+      "explain": "PARTIAL means some part of the work failed.",
+      "action": "check.compare",
+      "args": {
+        "left": "${run.status}",
+        "op": "eq",
+        "right": "COMPLETED"
+      }
+    },
+    {
+      "id": "warn",
+      "phase": "observe",
+      "title": "Job reported 0 warnings",
+      "explain": "Each warning is a document or step that went wrong.",
+      "action": "check.compare",
+      "args": {
+        "left": "${run.warnings}",
+        "op": "eq",
+        "right": 0
+      }
+    },
+    {
+      "id": "after",
+      "phase": "verify",
+      "title": "Collection info (After)",
+      "explain": "The collection the sink created.",
+      "action": "qdrant.collectionInfo",
+      "args": {
+        "collection": "rfcs"
+      },
+      "save": "info",
+      "compareKey": "rfcs-collection"
+    },
+    {
+      "id": "exists",
+      "phase": "verify",
+      "title": "The collection exists",
+      "explain": "The sink must create the collection itself.",
+      "action": "check.compare",
+      "args": {
+        "left": "${info.exists}",
+        "op": "eq",
+        "right": true
+      }
+    },
+    {
+      "id": "size",
+      "phase": "verify",
+      "title": "Vector size is 384",
+      "explain": "Matches vector_size in the pipeline; a wrong size would reject every point.",
+      "action": "check.compare",
+      "args": {
+        "left": "${info.size}",
+        "op": "eq",
+        "right": 384
+      }
+    },
+    {
+      "id": "dist",
+      "phase": "verify",
+      "title": "Distance is Cosine",
+      "explain": "The usual metric for text embeddings.",
+      "action": "check.compare",
+      "args": {
+        "left": "${info.distance}",
+        "op": "eq",
+        "right": "Cosine"
+      }
+    },
+    {
+      "id": "pts",
+      "phase": "verify",
+      "title": "The collection holds points",
+      "explain": "An empty collection would mean nothing was loaded.",
+      "action": "check.compare",
+      "args": {
+        "left": "${info.points}",
+        "op": "gt",
+        "right": 0
+      }
+    },
+    {
+      "id": "consistent",
+      "phase": "verify",
+      "title": "Point count equals the chunks the job reported",
+      "explain": "Every chunk the job counted should be exactly one point, no losses or doubles.",
+      "action": "check.compare",
+      "args": {
+        "left": "${info.points}",
+        "op": "eq",
+        "right": "${run.records}"
+      }
+    },
+    {
+      "id": "stats",
+      "phase": "verify",
+      "title": "Scan every point",
+      "explain": "Reads all points once to check payloads and vectors.",
+      "action": "qdrant.stats",
+      "args": {
+        "collection": "rfcs",
+        "dim": 384
+      },
+      "save": "stats"
+    },
+    {
+      "id": "payload",
+      "phase": "verify",
+      "title": "Every point has a payload",
+      "explain": "A point without payload cannot be traced back to a document.",
+      "action": "check.compare",
+      "args": {
+        "left": "${stats.withPayload}",
+        "op": "eq",
+        "right": "${stats.points}"
+      }
+    },
+    {
+      "id": "content",
+      "phase": "verify",
+      "title": "Every point carries chunk text",
+      "explain": "The text is what a RAG query would return.",
+      "action": "check.compare",
+      "args": {
+        "left": "${stats.withContent}",
+        "op": "eq",
+        "right": "${stats.points}"
+      }
+    },
+    {
+      "id": "source",
+      "phase": "verify",
+      "title": "Every point names its source file",
+      "explain": "Needed to cite which RFC a hit came from.",
+      "action": "check.compare",
+      "args": {
+        "left": "${stats.withSource}",
+        "op": "eq",
+        "right": "${stats.points}"
+      }
+    },
+    {
+      "id": "missing",
+      "phase": "verify",
+      "title": "Every RFC file has points",
+      "explain": "Names any RFC that was read but did not arrive.",
+      "action": "check.missing",
+      "args": {
+        "expected": "${srcFiles}",
+        "actual": "${stats.sources}"
+      }
+    },
+    {
+      "id": "hits",
+      "phase": "verify",
+      "title": "Find chunks containing \"three-way handshake\"",
+      "explain": "Real embeddings cannot be queried here, so this uses a payload text filter instead of semantic search.",
+      "action": "qdrant.scroll",
+      "args": {
+        "collection": "rfcs",
+        "filter": {
+          "must": [
+            {
+              "key": "content",
+              "match": {
+                "text": "three-way handshake"
+              }
+            }
+          ]
+        },
+        "limit": 20
+      },
+      "save": "hits"
+    },
+    {
+      "id": "right",
+      "phase": "verify",
+      "title": "A hit comes from rfc793.txt (TCP)",
+      "explain": "The phrase defines TCP connection setup, so the original TCP RFC must match.",
+      "action": "check.compare",
+      "args": {
+        "left": "${hits.sources}",
+        "op": "contains",
+        "right": "rfc793.txt"
+      }
+    },
+    {
+      "id": "real",
+      "phase": "verify",
+      "title": "Vectors are real embeddings (not all zero)",
+      "explain": "Without embeddings, semantic search returns nothing meaningful. Counts points whose vector is all zeros; expected 0.",
+      "action": "check.compare",
+      "args": {
+        "left": "${stats.zeroVectors}",
+        "op": "eq",
+        "right": 0
+      }
+    }
+  ]
+}

@@ -1,0 +1,218 @@
+{
+  "id": "S06-ch-linux-log-parse",
+  "title": "ClickHouse: Linux syslog lines are parsed into typed columns",
+  "tracker_row": "r065, r072",
+  "summary": "Loads 25,567 raw Linux syslog lines into ClickHouse and checks whether each line became its own row with parsed fields (timestamp, host, process, message). Today the pipeline only chunks the text with the plain extractor, so this is expected to fail.",
+  "flow": {
+    "source": {
+      "kind": "files",
+      "label": "640 Linux syslog .log files, 25,567 lines",
+      "detail": "${lab}/downloads/logs-parts/Linux"
+    },
+    "engine": {
+      "label": "openetl job run ch_linux_logs"
+    },
+    "target": {
+      "kind": "clickhouse",
+      "label": "ClickHouse table linux_logs",
+      "detail": "openetl-lab-clickhouse:8123/openetl"
+    }
+  },
+  "tags": [
+    "lab",
+    "clickhouse",
+    "processing",
+    "known-defect"
+  ],
+  "resources": [
+    "clickhouse:lab"
+  ],
+  "steps": [
+    {
+      "id": "empty",
+      "phase": "prepare",
+      "title": "Drop the ClickHouse table linux_logs",
+      "explain": "Starts from a clean slate so everything found later was written by this run.",
+      "action": "ch.dropTable",
+      "args": {
+        "table": "linux_logs"
+      }
+    },
+    {
+      "id": "srcLines",
+      "phase": "prepare",
+      "title": "Count the non-blank syslog lines in the source files",
+      "explain": "The number of rows a parsing load must produce, one per log line.",
+      "action": "s06.countLines",
+      "args": {
+        "dir": "${lab}/downloads/logs-parts/Linux",
+        "glob": "*.log",
+        "recursive": true
+      },
+      "save": "srcLines"
+    },
+    {
+      "id": "before",
+      "phase": "prepare",
+      "title": "List the table columns (Before)",
+      "explain": "Before the run the table does not exist, so it has no columns.",
+      "action": "ch.rows",
+      "args": {
+        "sql": "SELECT name, type FROM system.columns WHERE database = 'openetl' AND table = 'linux_logs' ORDER BY position"
+      },
+      "compareKey": "linux-logs-columns"
+    },
+    {
+      "id": "run",
+      "phase": "trigger",
+      "title": "Run the ch_linux_logs pipeline",
+      "explain": "Runs the real pipeline. Everything below checks what it produced.",
+      "action": "openetl.jobRun",
+      "args": {
+        "pipeline": "${lab}/pipelines/ch_linux_logs.toml",
+        "cwd": "${lab}",
+        "extras": [
+          "clickhouse"
+        ]
+      },
+      "save": "run"
+    },
+    {
+      "id": "status",
+      "phase": "observe",
+      "title": "Job finished with status COMPLETED",
+      "explain": "The job itself reports success; the checks below test whether the data is really parsed.",
+      "action": "check.compare",
+      "args": {
+        "left": "${run.status}",
+        "op": "eq",
+        "right": "COMPLETED"
+      }
+    },
+    {
+      "id": "warn",
+      "phase": "observe",
+      "title": "Job reported no warnings",
+      "explain": "Any warning would hint at skipped or unparsed lines.",
+      "action": "check.compare",
+      "args": {
+        "left": "${run.warnings}",
+        "op": "eq",
+        "right": 0
+      }
+    },
+    {
+      "id": "after",
+      "phase": "verify",
+      "title": "List the table columns (After)",
+      "explain": "Shows what the table looks like after the run: parsed fields or generic chunk columns.",
+      "action": "ch.rows",
+      "args": {
+        "sql": "SELECT name, type FROM system.columns WHERE database = 'openetl' AND table = 'linux_logs' ORDER BY position"
+      },
+      "compareKey": "linux-logs-columns"
+    },
+    {
+      "id": "rows",
+      "phase": "verify",
+      "title": "Count rows in linux_logs",
+      "explain": "The real number of rows ClickHouse holds.",
+      "action": "ch.scalar",
+      "args": {
+        "sql": "SELECT count() FROM linux_logs"
+      },
+      "save": "rowCount"
+    },
+    {
+      "id": "rowsEq",
+      "phase": "verify",
+      "title": "Row count equals the source line count",
+      "explain": "A parsing load stores one row per log line, so the counts must match.",
+      "action": "check.compare",
+      "args": {
+        "left": "${rowCount}",
+        "op": "eq",
+        "right": "${srcLines}"
+      }
+    },
+    {
+      "id": "fields",
+      "phase": "verify",
+      "title": "Count parsed field columns (timestamp, host, process, message)",
+      "explain": "The four basic syslog fields must exist as columns to be queryable.",
+      "action": "ch.scalar",
+      "args": {
+        "sql": "SELECT count() FROM system.columns WHERE database = 'openetl' AND table = 'linux_logs' AND name IN ('timestamp','host','process','message')"
+      },
+      "save": "fieldCols"
+    },
+    {
+      "id": "fieldsEq",
+      "phase": "verify",
+      "title": "All four parsed columns exist",
+      "explain": "Without them nothing can be filtered by host, process or time.",
+      "action": "check.compare",
+      "args": {
+        "left": "${fieldCols}",
+        "op": "eq",
+        "right": 4
+      }
+    },
+    {
+      "id": "tsType",
+      "phase": "verify",
+      "title": "Count timestamp columns of a date/time type",
+      "explain": "A timestamp stored as text cannot be range-queried.",
+      "action": "ch.scalar",
+      "args": {
+        "sql": "SELECT count() FROM system.columns WHERE database = 'openetl' AND table = 'linux_logs' AND name = 'timestamp' AND type LIKE 'DateTime%'"
+      },
+      "save": "tsCols"
+    },
+    {
+      "id": "tsEq",
+      "phase": "verify",
+      "title": "The timestamp column is a DateTime",
+      "explain": "Proves timestamps were parsed, not left inside the text.",
+      "action": "check.compare",
+      "args": {
+        "left": "${tsCols}",
+        "op": "eq",
+        "right": 1
+      }
+    },
+    {
+      "id": "multi",
+      "phase": "verify",
+      "title": "Count rows whose text holds more than one syslog line",
+      "explain": "A parsed row holds exactly one line; chunked blobs glue many lines together.",
+      "action": "ch.scalar",
+      "args": {
+        "sql": "SELECT count() FROM linux_logs WHERE countSubstrings(text, ' combo ') > 1"
+      },
+      "save": "blobRows"
+    },
+    {
+      "id": "multiEq",
+      "phase": "verify",
+      "title": "No row holds several glued log lines",
+      "explain": "Blob rows mean the lines were not split into events.",
+      "action": "check.compare",
+      "args": {
+        "left": "${blobRows}",
+        "op": "eq",
+        "right": 0
+      }
+    },
+    {
+      "id": "sample",
+      "phase": "verify",
+      "title": "Sample three stored rows",
+      "explain": "Shows what a stored row really looks like, for a human to judge.",
+      "action": "ch.rows",
+      "args": {
+        "sql": "SELECT element_type, length(text) AS text_len, substring(text, 1, 160) AS text_start FROM linux_logs ORDER BY sequence_index LIMIT 3"
+      }
+    }
+  ]
+}

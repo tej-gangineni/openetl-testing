@@ -220,15 +220,15 @@ function StepCard({ step, run, pairBefore, isBefore }) {
   );
 }
 
-export default function Timeline({ run }) {
+export default function Timeline({ run, only }) {
   const pairs = comparePairs(run);
   return (
     <div className="timeline">
-      {PHASES.map((ph) => {
+      {PHASES.filter((ph) => !only || ph === only).map((ph) => {
         const ids = run.order.filter((id) => run.steps[id].phase === ph);
         if (!ids.length) return null;
         return (
-          <section key={ph} className={`phase p-${phaseState(run, ph)}`} aria-labelledby={`ph-${ph}`}>
+          <section key={ph} className={`phase p-${phaseState(run, ph)} ${only ? "solo" : ""}`} aria-labelledby={`ph-${ph}`}>
             <div className="phead"><h2 id={`ph-${ph}`}>{PHASE_NAME[ph]}</h2><p>{PHASE_HINT[ph]}</p></div>
             <ol className="steps">
               {ids.map((id) => <StepCard key={id} step={run.steps[id]} run={run} pairBefore={pairs.after.get(id)} isBefore={pairs.before.has(id)} />)}

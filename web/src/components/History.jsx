@@ -23,7 +23,7 @@ export default function History({ scenarioId }) {
 
   return (
     <section className="page">
-      <nav className="crumbs"><a href="#/">Scenarios</a><span>/</span><span>History</span></nav>
+      <nav className="crumbs"><a href="#/">Test board</a><span>/</span><span>History</span></nav>
       <div className="headrow">
         <h1>{scenarioId ? (titles[scenarioId] || scenarioId) : 'All runs'}</h1>
         {scenarioId && <button className="run" onClick={rerun} disabled={busy}>Run again</button>}

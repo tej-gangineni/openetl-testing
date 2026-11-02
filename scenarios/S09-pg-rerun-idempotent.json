@@ -1,0 +1,224 @@
+{
+  "id": "S09-pg-rerun-idempotent",
+  "title": "Postgres: running the same job twice",
+  "tracker_row": "r151",
+  "summary": "Runs the pg_apache_logs batch job twice on an unchanged folder and checks whether the second run skips the files already processed or loads everything again (duplicate rows). It may legitimately fail: the pipeline is configured as full_refresh with append writes.",
+  "flow": {
+    "source": {
+      "kind": "files",
+      "label": "1,413 Apache log files",
+      "detail": "${lab}/downloads/logs-parts/Apache"
+    },
+    "engine": {
+      "label": "openetl job run pg_apache_logs (twice)"
+    },
+    "target": {
+      "kind": "postgres",
+      "label": "Postgres table apache_logs",
+      "detail": "openetl-lab-postgres:5433/openetl"
+    }
+  },
+  "tags": [
+    "lab",
+    "postgres",
+    "run-model",
+    "idempotency"
+  ],
+  "resources": [
+    "postgres:lab"
+  ],
+  "steps": [
+    {
+      "id": "empty",
+      "phase": "prepare",
+      "title": "Empty the apache_logs table",
+      "explain": "Starts from nothing so run 1 is a true first run.",
+      "action": "pg.dropTable",
+      "args": {
+        "table": "apache_logs"
+      }
+    },
+    {
+      "id": "src",
+      "phase": "prepare",
+      "title": "Count source files",
+      "explain": "The number of files a fresh run should read.",
+      "action": "fs.countFiles",
+      "args": {
+        "dir": "${lab}/downloads/logs-parts/Apache",
+        "glob": "*.log"
+      },
+      "save": "srcFiles"
+    },
+    {
+      "id": "before",
+      "phase": "prepare",
+      "title": "Read sample rows (Before)",
+      "explain": "Shows the table is empty before run 1.",
+      "action": "pg.rows",
+      "args": {
+        "sql": "SELECT source_filename, sequence_index, left(text, 50) AS text_start FROM apache_logs ORDER BY source_filename, sequence_index LIMIT 5",
+        "tolerateMissing": true
+      },
+      "compareKey": "apache-sample"
+    },
+    {
+      "id": "run1",
+      "phase": "trigger",
+      "title": "Run the job (first time)",
+      "explain": "A normal first load.",
+      "action": "openetl.jobRun",
+      "args": {
+        "pipeline": "${lab}/pipelines/pg_apache_logs.toml",
+        "cwd": "${lab}",
+        "extras": [
+          "postgres"
+        ]
+      },
+      "save": "run1"
+    },
+    {
+      "id": "count1",
+      "phase": "trigger",
+      "title": "Count rows after run 1",
+      "explain": "The baseline row count.",
+      "action": "pg.scalar",
+      "args": {
+        "sql": "SELECT count(*) FROM apache_logs"
+      },
+      "save": "rows1"
+    },
+    {
+      "id": "run2",
+      "phase": "trigger",
+      "title": "Run the same job again, nothing changed",
+      "explain": "The question: does OpenETL remember the files it already processed?",
+      "action": "openetl.jobRun",
+      "args": {
+        "pipeline": "${lab}/pipelines/pg_apache_logs.toml",
+        "cwd": "${lab}",
+        "extras": [
+          "postgres"
+        ]
+      },
+      "save": "run2"
+    },
+    {
+      "id": "count2",
+      "phase": "trigger",
+      "title": "Count rows after run 2",
+      "explain": "Compared with run 1 to detect duplicates.",
+      "action": "pg.scalar",
+      "args": {
+        "sql": "SELECT count(*) FROM apache_logs"
+      },
+      "save": "rows2"
+    },
+    {
+      "id": "st1",
+      "phase": "observe",
+      "title": "Run 1 COMPLETED",
+      "explain": "Confirms the first load itself worked.",
+      "action": "check.compare",
+      "args": {
+        "left": "${run1.status}",
+        "op": "eq",
+        "right": "COMPLETED"
+      }
+    },
+    {
+      "id": "files1",
+      "phase": "observe",
+      "title": "Run 1 read every source file",
+      "explain": "Proves run 1 saw all files.",
+      "action": "check.compare",
+      "args": {
+        "left": "${run1.files}",
+        "op": "eq",
+        "right": "${srcFiles}"
+      }
+    },
+    {
+      "id": "st2",
+      "phase": "observe",
+      "title": "Run 2 COMPLETED",
+      "explain": "The rerun must not crash.",
+      "action": "check.compare",
+      "args": {
+        "left": "${run2.status}",
+        "op": "eq",
+        "right": "COMPLETED"
+      }
+    },
+    {
+      "id": "files2",
+      "phase": "observe",
+      "title": "Run 2 reports 0 files processed",
+      "explain": "If state tracking worked, an unchanged folder yields no new files.",
+      "action": "check.compare",
+      "args": {
+        "left": "${run2.files}",
+        "op": "eq",
+        "right": 0
+      }
+    },
+    {
+      "id": "recs2",
+      "phase": "observe",
+      "title": "Run 2 reports 0 records",
+      "explain": "No new files should mean no new records.",
+      "action": "check.compare",
+      "args": {
+        "left": "${run2.records}",
+        "op": "eq",
+        "right": 0
+      }
+    },
+    {
+      "id": "rowsEq",
+      "phase": "verify",
+      "title": "Row count after run 2 equals run 1",
+      "explain": "More rows means the second run loaded everything twice.",
+      "action": "check.compare",
+      "args": {
+        "left": "${rows2}",
+        "op": "eq",
+        "right": "${rows1}"
+      }
+    },
+    {
+      "id": "dupes",
+      "phase": "verify",
+      "title": "Count extra rows (total minus distinct lines)",
+      "explain": "Identical rows repeated by the second run.",
+      "action": "pg.scalar",
+      "args": {
+        "sql": "SELECT count(*) - count(DISTINCT (source_filename, sequence_index)) FROM apache_logs"
+      },
+      "save": "dupes"
+    },
+    {
+      "id": "dupesEq",
+      "phase": "verify",
+      "title": "No chunk is stored twice",
+      "explain": "Duplicates after a rerun are the visible damage.",
+      "action": "check.compare",
+      "args": {
+        "left": "${dupes}",
+        "op": "eq",
+        "right": 0
+      }
+    },
+    {
+      "id": "after",
+      "phase": "verify",
+      "title": "Read sample rows (After)",
+      "explain": "Shows the table after both runs.",
+      "action": "pg.rows",
+      "args": {
+        "sql": "SELECT source_filename, sequence_index, left(text, 50) AS text_start FROM apache_logs ORDER BY source_filename, sequence_index LIMIT 5"
+      },
+      "compareKey": "apache-sample"
+    }
+  ]
+}
