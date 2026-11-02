@@ -3,6 +3,9 @@ export const HOSTS = {
   clickhouse: 'http://127.0.0.1:8123',
   elasticsearch: 'http://127.0.0.1:9200',
   relata: 'http://localhost:9090',
+  openetl: 'http://127.0.0.1:8080',
+  qdrant: 'http://127.0.0.1:6333',
+  labweb: 'http://127.0.0.1:8765',
 };
 
 export async function request(method, url, { headers = {}, body, signal, timeoutMs = 60000 } = {}) {

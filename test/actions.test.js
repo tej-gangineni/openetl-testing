@@ -188,3 +188,89 @@ test('scenario files are v2: summary, flow, explain per step, known actions, uni
     }
   }
 });
+
+// ---------- OpenETL HTTP API actions (E scenarios) ----------
+import { upperStatus, isTerminal, pickRun, runSummary, envProblem, maskSecrets, maskObject } from '../src/actions/api.js';
+import { insideE2e, markContent, buildSite } from '../src/actions/e2e.js';
+
+test('api: status mapping is upper-case and knows terminal states', () => {
+  assert.equal(upperStatus('completed'), 'COMPLETED');
+  assert.equal(upperStatus(' partial '), 'PARTIAL');
+  assert.equal(upperStatus(null), 'UNKNOWN');
+  assert.ok(isTerminal('failed'));
+  assert.ok(isTerminal('COMPLETED'));
+  assert.ok(!isTerminal('running'));
+  assert.ok(!isTerminal(undefined));
+});
+
+test('api: pickRun takes the newest run of the job started after the submit time', () => {
+  const runs = [
+    { run_id: 'r3', job_name: 'other', started_at: '2026-11-02T10:00:09Z' },
+    { run_id: 'r2', job_name: 'job', started_at: '2026-11-02T10:00:05Z' },
+    { run_id: 'r1', job_name: 'job', started_at: '2026-11-02T09:59:00Z' },
+  ];
+  assert.equal(pickRun(runs, { name: 'job', after: '2026-11-02T10:00:00Z' }).run_id, 'r2');
+  assert.equal(pickRun(runs, { name: 'job', after: '2026-11-02T10:00:07Z' }), null, 'an older run is never picked');
+  assert.equal(pickRun(runs, { name: 'job', after: '2026-11-02T10:00:05.500Z' }).run_id, 'r2', '1 s slack for rounding');
+  assert.equal(pickRun(runs, { runId: 'r1' }).run_id, 'r1', 'run_id wins when known');
+  assert.equal(pickRun(null, { name: 'job' }), null);
+});
+
+test('api: runSummary flattens the manifest, falls back to the task result', () => {
+  const run = { run_id: 'r1', status: 'partial', started_at: '2026-11-02T10:00:00Z', completed_at: '2026-11-02T10:00:02Z', error: null,
+    manifest: { total_files: 2, total_records: 9, records_delivered: 8, records_failed: 1, elapsed_s: 2.2, sinks: [{ sink: 'a', type: 'RelataSink', delivered: 8, failed: 1 }] } };
+  const s = runSummary(run, null);
+  assert.equal(s.status, 'PARTIAL');
+  assert.deepEqual([s.files, s.records, s.delivered, s.failed, s.sinkCount], [2, 9, 8, 1, 1]);
+  assert.equal(s.elapsedGapMs, 200);
+  assert.equal(s.hasRunRecord, true);
+  const t = runSummary(null, { status: 'failed', error: 'boom' });
+  assert.equal(t.status, 'FAILED');
+  assert.equal(t.error, 'boom');
+  assert.equal(t.hasRunRecord, false);
+  assert.equal(t.run_id, null);
+});
+
+test('api: a missing driver is an environment problem, other errors are not', () => {
+  assert.match(envProblem("elasticsearch not installed. Run: pip install 'openetl[elasticsearch]'"), /not installed/);
+  assert.match(envProblem("Install openetl[mongodb]: pip install 'openetl[mongodb]'"), /openetl\[mongodb\]/);
+  assert.equal(envProblem('password authentication failed for user "lab"'), null);
+  assert.equal(envProblem(null), null);
+});
+
+test('api: secrets are masked in TOML, JSON, DSNs and literals', () => {
+  const toml = 'name = "x"\ntoken = "abc-secret-1"\ndsn = "postgresql://lab:pw-2@h:5433/db"\napi_key="k-3"\n';
+  const m = maskSecrets(toml);
+  assert.ok(!m.includes('abc-secret-1') && !m.includes('pw-2') && !m.includes('k-3'), m);
+  assert.ok(m.includes('token = "***"') && m.includes('lab:***@h'));
+  assert.equal(maskSecrets('host=h password=pw-4 dbname=d'), 'host=h password=*** dbname=d');
+  assert.equal(maskSecrets('{"auth_token":"t-5","x":1}'), '{"auth_token":"***","x":1}');
+  assert.equal(maskSecrets('Bearer REALTOKEN here', ['REALTOKEN']), 'Bearer *** here');
+  const o = maskObject({ type: 'http', config: { url: 'http://u:pw-6@h/x', auth_token: 't-7', path: '/a' } });
+  assert.deepEqual(o, { type: 'http', config: { url: 'http://u:***@h/x', auth_token: '***', path: '/a' } });
+});
+
+test('check.delta, not_contains and hasKeys', async () => {
+  assert.equal((await actions['check.delta']({ before: 10, after: 15, expected: 5 })).ok, true);
+  assert.equal((await actions['check.delta']({ before: '10', after: '14', expected: 5 })).ok, false);
+  await assert.rejects(actions['check.delta']({ before: null, after: 1, expected: 1 }));
+  assert.equal((await actions['check.compare']({ left: '{"a":"x"}', op: 'not_contains', right: 'secret' })).ok, true);
+  assert.equal((await actions['check.compare']({ left: { a: 'has secret' }, op: 'not_contains', right: 'secret' })).ok, false, 'objects are searched as JSON');
+  const r = await actions['check.hasKeys']({ object: { a: 1, b: { c: 2 } }, keys: ['a', 'b.c', 'b.d'] });
+  assert.equal(r.ok, false);
+  assert.deepEqual(r.value, ['b.d']);
+});
+
+test('e2e helpers: only state/e2e may be removed; markers make content unique', async () => {
+  assert.ok(insideE2e('/lab/state/e2e/x', '/lab/state/e2e'));
+  assert.ok(!insideE2e('/lab/state/e2e', '/lab/state/e2e'));
+  assert.ok(!insideE2e('/lab/state/e2e/../runs', '/lab/state/e2e'));
+  await assert.rejects(actions['fs.removeE2e']({ path: '/tmp/x' }, { vars: { lab: '/lab' } }), /Refusing/);
+  assert.match(markContent('a.html', '<html><body class="x"><p>hi</p></body></html>', 'M1'), /<body class="x"><p>E2E run marker M1/);
+  assert.equal(JSON.parse(markContent('a.json', '{"id":1}', 'M2')).e2e_marker, 'M2');
+  assert.match(markContent('a.log', 'line\n', 'M3'), /line\n\nE2E run marker M3 for a\.log\.\n$/);
+  const site = buildSite({ base: 'http://127.0.0.1:1', marker: 'MK', pages: 2, paragraphs: Array.from({ length: 30 }, (_, i) => `para ${i}`) });
+  assert.deepEqual(Object.keys(site).sort(), ['/', '/feed.xml', '/index.html', '/pages/p1.html', '/pages/p2.html']);
+  assert.equal((site['/feed.xml'].match(/<item>/g) || []).length, 2);
+  assert.ok(site['/pages/p2.html'].includes('MK') && site['/pages/p2.html'].includes('para 15'));
+});

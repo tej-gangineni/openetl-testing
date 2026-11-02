@@ -7,8 +7,14 @@ const OPS = {
   gte: (a, b) => Number(a) >= Number(b),
   lt: (a, b) => Number(a) < Number(b),
   lte: (a, b) => Number(a) <= Number(b),
-  contains: (a, b) => (Array.isArray(a) ? a.includes(b) : String(a).includes(String(b))),
+  contains: (a, b) => (Array.isArray(a) ? a.includes(b) : text(a).includes(String(b))),
+  not_contains: (a, b) => (Array.isArray(a) ? !a.includes(b) : !text(a).includes(String(b))),
 };
+
+// Objects are searched as JSON, so "contains" on a response object looks inside it.
+function text(a) {
+  return a !== null && typeof a === 'object' ? JSON.stringify(a) : String(a);
+}
 
 // Numeric strings equal numbers ("12" eq 12); everything else compares as JSON.
 function same(a, b) {
@@ -43,5 +49,35 @@ export async function missing({ expected, actual }, ctx) {
   return {
     ok, value: gone, evidence: { expected: expected.length, found: actual.length, missing: gone },
     io: { kind: 'compare', request: { left: `${expected.length} expected items`, op: 'all present in', right: `${actual.length} found items` }, response: { ok, missing: gone.slice(0, 50) } },
+  };
+}
+
+// after - before compared with expected (default op eq). Used for "the target count rose by exactly N".
+export async function delta({ before, after, expected, op = 'eq' }, ctx) {
+  const fn = OPS[op];
+  if (!fn) throw new Error(`Unknown op: ${op}`);
+  if ([before, after, expected].some((x) => x === null || x === undefined || x === '' || isNaN(Number(x)))) {
+    throw new Error(`check.delta needs numbers, got before=${JSON.stringify(before)} after=${JSON.stringify(after)} expected=${JSON.stringify(expected)}`);
+  }
+  const d = Number(after) - Number(before);
+  const ok = fn(d, Number(expected));
+  ctx?.log?.(`${after} - ${before} = ${d} ${op} ${expected} -> ${ok}`);
+  return {
+    ok, value: d, evidence: { before, after, delta: d, op, expected },
+    io: { kind: 'compare', request: { left: `${after} - ${before} = ${d}`, op, right: expected }, response: { ok, result: ok ? 'true' : 'false' } },
+  };
+}
+
+// Which of `keys` (dotted paths allowed) are absent from `object`? ok when none.
+export async function hasKeys({ object, keys }, ctx) {
+  if (!object || typeof object !== 'object') throw new Error(`hasKeys needs an object, got ${JSON.stringify(object)?.slice(0, 100)}`);
+  if (!Array.isArray(keys)) throw new Error('keys must be a list');
+  const get = (o, k) => k.split('.').reduce((a, p) => (a !== null && a !== undefined && typeof a === 'object' && p in a ? a[p] : undefined), o);
+  const gone = keys.filter((k) => get(object, k) === undefined);
+  const ok = gone.length === 0;
+  ctx?.log?.(`${keys.length} keys expected, ${gone.length} missing${gone.length ? ': ' + gone.join(', ') : ''}`);
+  return {
+    ok, value: gone, evidence: { expected: keys, missing: gone, present: Object.keys(object).slice(0, 40) },
+    io: { kind: 'compare', request: { left: `keys of object (${Object.keys(object).slice(0, 30).join(', ')})`, op: 'has all of', right: keys.join(', ') }, response: { ok, missing: gone } },
   };
 }
