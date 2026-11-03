@@ -154,7 +154,7 @@
       "action": "es.distinct",
       "args": {
         "index": "e2e_rss_feed",
-        "field": "source_filename.keyword"
+        "field": "source_filename"
       },
       "save": "df"
     },

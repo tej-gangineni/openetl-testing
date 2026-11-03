@@ -166,7 +166,7 @@
       "action": "es.distinct",
       "args": {
         "index": "e2e_healthapp_logs",
-        "field": "source_filename.keyword"
+        "field": "source_filename"
       },
       "save": "df"
     },
