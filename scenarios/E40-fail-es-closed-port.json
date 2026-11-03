@@ -68,12 +68,12 @@
       "id": "deliv",
       "phase": "observe",
       "title": "Nothing reported as delivered",
-      "explain": "records_delivered must not be above 0.",
+      "explain": "records_delivered must not be above 0 (empty or 0: the job never reached Elasticsearch).",
       "action": "check.compare",
       "args": {
         "left": "${run.delivered}",
-        "op": "ne",
-        "right": "${run.records}"
+        "op": "lte",
+        "right": 0
       }
     },
     {

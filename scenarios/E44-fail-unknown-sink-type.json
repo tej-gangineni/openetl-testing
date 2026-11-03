@@ -79,13 +79,13 @@
     {
       "id": "noRun",
       "phase": "observe",
-      "title": "No completed run exists for it",
-      "explain": "Nothing ran.",
+      "title": "It shows as a failed run, not a completed one",
+      "explain": "Every failure must be visible in the run history (openetl#976); the status step already checks it is not COMPLETED.",
       "action": "check.compare",
       "args": {
         "left": "${run.hasRunRecord}",
         "op": "eq",
-        "right": false
+        "right": true
       }
     }
   ]
